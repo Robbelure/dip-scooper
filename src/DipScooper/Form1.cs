@@ -3,6 +3,7 @@ using System.Text.Json.Nodes;
 using System.Text.Json;
 using System.Globalization;
 using System.Diagnostics;
+using System.Windows.Forms;
 
 namespace DipScooper
 {
@@ -17,12 +18,135 @@ namespace DipScooper
             apiClient = new ApiClient();
         }
 
+        private async void btnCalculate_Click(object sender, EventArgs e)
+        {
+            string symbol = textBoxSearch.Text.Trim();
+            if (string.IsNullOrEmpty(symbol))
+            {
+                MessageBox.Show("Please enter a valid stock symbol.");
+                return;
+            }
+
+            double discountRate = 0.1;
+            double growthRate = 0.05;
+
+            DataTable dataTable;
+            if (dataGridView_analyze.DataSource == null)
+            {
+                dataTable = new DataTable();
+                dataTable.Columns.Add("Calculation", typeof(string));
+                dataTable.Columns.Add("Result", typeof(double));
+            }
+            else
+            {
+                dataTable = (DataTable)dataGridView_analyze.DataSource;
+            }
+
+            try
+            {
+                if (checkBoxPERatio.Checked)
+                {
+                    double marketPrice = await apiClient.GetLatestMarketPriceAsync(symbol);
+                    double earningsPerShare = await apiClient.GetEarningsPerShareAsync(symbol);
+
+                    if (earningsPerShare == 0)
+                    {
+                        MessageBox.Show("EPS data not available.");
+                        return;
+                    }
+
+                    double peRatio = stockCalculator.CalculatePERatio(marketPrice, earningsPerShare);
+                    DataRow rowPERatio = dataTable.NewRow();
+                    rowPERatio["Calculation"] = "P/E Ratio";
+                    rowPERatio["Result"] = peRatio;
+                    dataTable.Rows.Add(rowPERatio);
+
+                    // Beregning av Trailing P/E Ratio
+                    List<double> trailingEPS = await apiClient.GetTrailingEPSAsync(symbol);
+                    if (trailingEPS == null || trailingEPS.Count < 4)
+                    {
+                        MessageBox.Show("Not enough EPS data available for trailing P/E.");
+                        return;
+                    }
+                    double totalEPS = trailingEPS.Sum();
+                    double trailingPERatio = marketPrice / totalEPS;
+                    DataRow rowTrailingPERatio = dataTable.NewRow();
+                    rowTrailingPERatio["Calculation"] = "Trailing P/E Ratio";
+                    rowTrailingPERatio["Result"] = trailingPERatio;
+                    dataTable.Rows.Add(rowTrailingPERatio);
+                }
+
+                if (checkBoxPBRatio.Checked)
+                {
+                    double marketPrice = await apiClient.GetLatestMarketPriceAsync(symbol);
+                    double bookValuePerShare = await apiClient.GetBookValuePerShareAsync(symbol);
+
+                    if (bookValuePerShare == 0)
+                    {
+                        MessageBox.Show("Book value per share data not available.");
+                        return;
+                    }
+
+                    double pbRatio = stockCalculator.CalculatePBRatio(marketPrice, bookValuePerShare);
+                    DataRow rowPBRatio = dataTable.NewRow();
+                    rowPBRatio["Calculation"] = "P/B Ratio";
+                    rowPBRatio["Result"] = pbRatio;
+                    dataTable.Rows.Add(rowPBRatio);
+                }
+
+                if (checkBoxDCF.Checked)
+                {
+                    List<double> cashFlows = await apiClient.GetCashFlowsAsync(symbol);
+                    Debug.WriteLine($"Cash Flows for {symbol}: {string.Join(", ", cashFlows)}");
+
+                    if (cashFlows == null || cashFlows.Count == 0)
+                    {
+                        MessageBox.Show("No cash flow data available.");
+                        return;
+                    }
+
+
+                    double dcfValue = stockCalculator.CalculateDCF(cashFlows, discountRate);
+                    DataRow rowDCF = dataTable.NewRow();
+                    rowDCF["Calculation"] = "DCF Value";
+                    rowDCF["Result"] = dcfValue;
+                    dataTable.Rows.Add(rowDCF);
+                }
+
+                if (checkBoxDDM.Checked)
+                {
+                    double lastDividend = await apiClient.GetLastDividendAsync(symbol);
+                    if (lastDividend == 0)
+                    {
+                        MessageBox.Show("Dividend data not available.");
+                        return;
+                    }
+
+                    double ddmValue = stockCalculator.CalculateDDM(lastDividend, growthRate, discountRate);
+
+                    DataRow row = dataTable.NewRow();
+                    row["Calculation"] = "Dividend Discount Model Value";
+                    row["Result"] = ddmValue;
+                    dataTable.Rows.Add(row);
+                }
+
+
+                dataGridView_analyze.DataSource = dataTable;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error performing calculations: {ex.Message}\nStackTrace: {ex.StackTrace}");
+                Debug.WriteLine($"Error performing calculations: {ex.Message}\nStackTrace: {ex.StackTrace}");
+            }
+        }
+
         private async void BtnSearch_Click(object sender, EventArgs e)
         {
             lblStatus.Text = "Searching...";
             lblStatus.ForeColor = System.Drawing.Color.Blue;
             string symbol = textBoxSearch.Text.Trim();
-            string frequency = comboBoxFrequency.SelectedItem.ToString().ToLower();
+            string startDate = dateTimePickerStart.Value.ToString("yyyy-MM-dd");
+            string endDate = dateTimePickerEnd.Value.ToString("yyyy-MM-dd");
 
             if (string.IsNullOrEmpty(symbol))
             {
@@ -32,8 +156,7 @@ namespace DipScooper
                 return;
             }
 
-            ApiClient apiClient = new ApiClient();
-            string jsonData = await apiClient.GetTimeSeriesAsync(symbol, "compact", frequency);
+            string jsonData = await apiClient.GetTimeSeriesAsync(symbol, startDate, endDate);
 
             if (string.IsNullOrEmpty(jsonData))
             {
@@ -55,57 +178,39 @@ namespace DipScooper
             try
             {
                 Debug.WriteLine(jsonData);
-                var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-                using (var jsonDocument = JsonDocument.Parse(jsonData))
+                var jsonDocument = JsonDocument.Parse(jsonData);
+                var root = jsonDocument.RootElement.GetProperty("results");
+                var dataTable = new DataTable();
+                dataTable.Columns.Add("Date", typeof(string));
+                dataTable.Columns.Add("Open", typeof(double));
+                dataTable.Columns.Add("High", typeof(double));
+                dataTable.Columns.Add("Low", typeof(double));
+                dataTable.Columns.Add("Close", typeof(double));
+                dataTable.Columns.Add("Volume", typeof(long));
+
+                foreach (var result in root.EnumerateArray())
                 {
-                    string timeSeriesKey = "";
-                    switch (comboBoxFrequency.SelectedItem.ToString().ToLower())
-                    {
-                        case "weekly":
-                            timeSeriesKey = "Weekly Time Series";
-                            break;
-                        case "monthly":
-                            timeSeriesKey = "Monthly Time Series";
-                            break;
-                        case "daily":
-                        default:
-                            timeSeriesKey = "Time Series (Daily)"; // Juster dette til korrekt API-nøkkel hvis nødvendig
-                            break;
-                    }
-
-                    var root = jsonDocument.RootElement.GetProperty(timeSeriesKey);
-                    var dataTable = new DataTable();
-                    dataTable.Columns.Add("Date", typeof(string));
-                    dataTable.Columns.Add("Open", typeof(double));
-                    dataTable.Columns.Add("High", typeof(double));
-                    dataTable.Columns.Add("Low", typeof(double));
-                    dataTable.Columns.Add("Close", typeof(double));
-                    dataTable.Columns.Add("Volume", typeof(long));
-
-                    foreach (var element in root.EnumerateObject())
-                    {
-                        var row = dataTable.NewRow();
-                        row["Date"] = element.Name;
-                        row["Open"] = double.Parse(element.Value.GetProperty("1. open").GetString(), CultureInfo.InvariantCulture);
-                        row["High"] = double.Parse(element.Value.GetProperty("2. high").GetString(), CultureInfo.InvariantCulture);
-                        row["Low"] = double.Parse(element.Value.GetProperty("3. low").GetString(), CultureInfo.InvariantCulture);
-                        row["Close"] = double.Parse(element.Value.GetProperty("4. close").GetString(), CultureInfo.InvariantCulture);
-                        row["Volume"] = long.Parse(element.Value.GetProperty("5. volume").GetString(), CultureInfo.InvariantCulture);
-                        dataTable.Rows.Add(row);
-                    }
-
-                    dataGridView_stocks.DataSource = dataTable;
+                    var row = dataTable.NewRow();
+                    long timestamp = result.GetProperty("t").GetInt64();  // Hent timestamp som en long
+                    DateTime date = DateTimeOffset.FromUnixTimeMilliseconds(timestamp).DateTime;  // Konverter timestamp til DateTime
+                    row["Date"] = date.ToString("yyyy-MM-dd");  // Formatér dato som string
+                    row["Open"] = result.GetProperty("o").GetDouble();
+                    row["High"] = result.GetProperty("h").GetDouble();
+                    row["Low"] = result.GetProperty("l").GetDouble();
+                    row["Close"] = result.GetProperty("c").GetDouble();
+                    row["Volume"] = result.GetProperty("v").GetDouble();  // Antar at volum kan være et stort tall, så bruk GetDouble() hvis nødvendig
+                    dataTable.Rows.Add(row);
                 }
+
+                dataGridView_stocks.DataSource = dataTable;
             }
             catch (Exception ex)
             {
-                Debug.WriteLine("Failed to parse JSON: " + jsonData); // Viser de rå dataene som førte til feilen
+                Debug.WriteLine("Failed to parse JSON: " + jsonData);
                 lblStatus.Text = "Error parsing data: " + ex.Message;
                 lblStatus.ForeColor = System.Drawing.Color.Red;
             }
         }
-
-
 
         // timer for lblStatus
         private void TimerStatus_Tick(object sender, EventArgs e)
@@ -117,208 +222,6 @@ namespace DipScooper
         private void StartStatusTimer()
         {
             TimerStatus.Start();
-        }
-
-
-
-        private async void btnCalculate_Click(object sender, EventArgs e)
-        {
-            lblStatus.Text = "Calculating...";
-            lblStatus.ForeColor = System.Drawing.Color.Blue;
-
-            string symbol = textBoxSearch.Text.Trim();
-            if (string.IsNullOrEmpty(symbol))
-            {
-                DisplayError("Please enter a valid stock symbol.");
-                return;
-            }
-
-            try
-            {
-                string frequency = comboBoxFrequency.SelectedItem.ToString().ToLower();
-                Debug.WriteLine($"Calculating P/E Ratio for {frequency}");
-
-                if (checkBoxPERatio.Checked)
-                {
-                    double marketPrice = await GetLatestMarketPriceAsync(symbol);
-                    Debug.WriteLine($"Market price for {frequency}: {marketPrice}");
-
-                    double earningsPerShare = await apiClient.GetEarningsPerShareAsync(symbol);
-                    double peRatio = stockCalculator.CalculatePERatio(marketPrice, earningsPerShare);
-
-                    lblStatus.Text = "P/E Ratio calculated successfully.";
-                    lblStatus.ForeColor = System.Drawing.Color.Green;
-                    DisplayCalculationResult("P/E Ratio", peRatio);
-                }
-
-                if (checkBoxPBRatio.Checked)
-                {
-                    double marketPrice = await GetLatestMarketPriceAsync(symbol);
-                    double bookValuePerShare = await apiClient.GetBookValuePerShareAsync(symbol);
-                    double pbRatio = stockCalculator.CalculatePBRatio(marketPrice, bookValuePerShare);
-
-                    lblStatus.Text = "P/B Ratio calculated successfully.";
-                    lblStatus.ForeColor = System.Drawing.Color.Green;
-                    DisplayCalculationResult("P/B Ratio", pbRatio);
-                }
-
-                // Implementer flere beregninger her for DCF og Dividend Discount Model
-            }
-            catch (Exception ex)
-            {
-                DisplayError($"Error calculating: {ex.Message}");
-                Debug.WriteLine($"Error calculating: {ex.Message}");
-                Debug.WriteLine($"Stack Trace: {ex.StackTrace}");
-            }
-            StartStatusTimer();
-        }
-
-        private async Task<double> GetLatestMarketPriceAsync(string symbol)
-        {
-            string frequency = comboBoxFrequency.SelectedItem.ToString().ToLower();
-            string jsonData = await apiClient.GetTimeSeriesAsync(symbol, "compact", frequency);
-            Debug.WriteLine($"Fetched JSON data for {frequency}: {jsonData}");
-            using (var jsonDocument = JsonDocument.Parse(jsonData))
-            {
-                string timeSeriesKey = "";
-                switch (frequency)
-                {
-                    case "weekly":
-                        timeSeriesKey = "Weekly Time Series";
-                        break;
-                    case "monthly":
-                        timeSeriesKey = "Monthly Time Series";
-                        break;
-                    case "daily":
-                    default:
-                        timeSeriesKey = "Time Series (Daily)";
-                        break;
-                }
-
-                var root = jsonDocument.RootElement.GetProperty(timeSeriesKey);
-                var latestData = root.EnumerateObject().First().Value;
-                var closeElement = latestData.GetProperty("4. close");
-
-                if (closeElement.ValueKind == JsonValueKind.String && double.TryParse(closeElement.GetString(), NumberStyles.Any, CultureInfo.InvariantCulture, out double closeValue))
-                {
-                    Debug.WriteLine($"Latest market price for {frequency}: {closeValue}");
-                    return closeValue;
-                }
-                else if (closeElement.ValueKind == JsonValueKind.Number)
-                {
-                    double closeValueNum = closeElement.GetDouble();
-                    Debug.WriteLine($"Latest market price for {frequency}: {closeValueNum}");
-                    return closeValueNum;
-                }
-                else
-                {
-                    Debug.WriteLine("Unexpected close value type.");
-                    return 0.0;
-                }
-            }
-        }
-
-        /*
-        private async Task<double> GetLatestMarketPriceAsync(string symbol)
-        {
-            string jsonData = await apiClient.GetDailyTimeSeriesAsync(symbol);
-            using (var jsonDocument = JsonDocument.Parse(jsonData))
-            {
-                var root = jsonDocument.RootElement.GetProperty("Time Series (Daily)");
-                var latestData = root.EnumerateObject().First().Value;
-
-                // Logge tilgjengelige nøkler i JSON-objektet
-                foreach (var property in latestData.EnumerateObject())
-                {
-                    Debug.WriteLine($"Property: {property.Name} = {property.Value}");
-                }
-
-                if (latestData.TryGetProperty("4. close", out JsonElement closeElement))
-                {
-                    // Logge typen av '4. close'
-                    Debug.WriteLine("4. close Type: ");
-                    Debug.WriteLine(closeElement.ValueKind.ToString());
-
-                    if (closeElement.ValueKind == JsonValueKind.String)
-                    {
-                        var closeString = closeElement.GetString();
-                        Debug.WriteLine("4. close (String): ");
-                        Debug.WriteLine(closeString);
-
-                        if (double.TryParse(closeString, NumberStyles.Any, CultureInfo.InvariantCulture, out double closeValue))
-                        {
-                            return closeValue;
-                        }
-                        else
-                        {
-                            Debug.WriteLine("Error parsing close value.");
-                            return 0.0;
-                        }
-                    }
-                    else if (closeElement.ValueKind == JsonValueKind.Number)
-                    {
-                        var closeValue = closeElement.GetDouble();
-                        Debug.WriteLine("4. close (Number): ");
-                        Debug.WriteLine(closeValue.ToString(CultureInfo.InvariantCulture));
-                        return closeValue;
-                    }
-                    else
-                    {
-                        Debug.WriteLine("Unexpected close value type.");
-                        return 0.0;
-                    }
-                }
-                else
-                {
-                    Debug.WriteLine("Key '4. close' not found.");
-                    return 0.0;
-                }
-            }
-        }
-        */
-
-        private void DisplayCalculationResult(string calculationName, double result)
-        {
-            var dataTable = dataGridView_analyze.DataSource as DataTable;
-            if (dataTable == null)
-            {
-                dataTable = new DataTable();
-                dataTable.Columns.Add("Calculation", typeof(string));
-                dataTable.Columns.Add("Result", typeof(double));
-                dataGridView_analyze.DataSource = dataTable;
-            }
-
-            var row = dataTable.NewRow();
-            row["Calculation"] = calculationName;
-            row["Result"] = result;
-            dataTable.Rows.Add(row);
-        }
-
-        /*
-        private void DisplayCalculationResult(string calculationName, double result)
-        {
-            var dataTable = new DataTable();
-            dataTable.Columns.Add("Calculation", typeof(string));
-            dataTable.Columns.Add("Result", typeof(double));
-
-            var row = dataTable.NewRow();
-            row["Calculation"] = calculationName;
-            row["Result"] = result;
-            dataTable.Rows.Add(row);
-
-            dataGridView_analyze.DataSource = dataTable;
-        }
-        */
-
-        private void DisplayError(string message)
-        {
-            lblStatus.Text = message;
-            lblStatus.ForeColor = System.Drawing.Color.Red;
-
-            ToolTip toolTip = new ToolTip();
-            toolTip.SetToolTip(lblStatus, message); // Viser hele meldingen som et verktøytips
-
-            //StartStatusTimer();
         }
 
         private void Form1_Load(object sender, EventArgs e)

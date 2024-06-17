@@ -37,10 +37,12 @@
             checkBoxPERatio = new CheckBox();
             checkBoxPBRatio = new CheckBox();
             checkBoxDCF = new CheckBox();
-            checkBoxDividendDiscountModel = new CheckBox();
+            checkBoxDDM = new CheckBox();
             btnCalculate = new Button();
             dataGridView_analyze = new DataGridView();
             comboBoxFrequency = new ComboBox();
+            dateTimePickerStart = new DateTimePicker();
+            dateTimePickerEnd = new DateTimePicker();
             ((System.ComponentModel.ISupportInitialize)dataGridView_stocks).BeginInit();
             ((System.ComponentModel.ISupportInitialize)dataGridView_analyze).BeginInit();
             SuspendLayout();
@@ -93,9 +95,9 @@
             checkBoxPERatio.AutoSize = true;
             checkBoxPERatio.Location = new Point(539, 12);
             checkBoxPERatio.Name = "checkBoxPERatio";
-            checkBoxPERatio.Size = new Size(82, 19);
+            checkBoxPERatio.Size = new Size(73, 19);
             checkBoxPERatio.TabIndex = 5;
-            checkBoxPERatio.Text = "checkBox1";
+            checkBoxPERatio.Text = "P/E-ratio";
             checkBoxPERatio.UseVisualStyleBackColor = true;
             // 
             // checkBoxPBRatio
@@ -103,9 +105,9 @@
             checkBoxPBRatio.AutoSize = true;
             checkBoxPBRatio.Location = new Point(539, 37);
             checkBoxPBRatio.Name = "checkBoxPBRatio";
-            checkBoxPBRatio.Size = new Size(82, 19);
+            checkBoxPBRatio.Size = new Size(74, 19);
             checkBoxPBRatio.TabIndex = 6;
-            checkBoxPBRatio.Text = "checkBox2";
+            checkBoxPBRatio.Text = "P/B-ratio";
             checkBoxPBRatio.UseVisualStyleBackColor = true;
             // 
             // checkBoxDCF
@@ -113,20 +115,20 @@
             checkBoxDCF.AutoSize = true;
             checkBoxDCF.Location = new Point(627, 12);
             checkBoxDCF.Name = "checkBoxDCF";
-            checkBoxDCF.Size = new Size(82, 19);
+            checkBoxDCF.Size = new Size(48, 19);
             checkBoxDCF.TabIndex = 7;
-            checkBoxDCF.Text = "checkBox3";
+            checkBoxDCF.Text = "DCF";
             checkBoxDCF.UseVisualStyleBackColor = true;
             // 
-            // checkBoxDividendDiscountModel
+            // checkBoxDDM
             // 
-            checkBoxDividendDiscountModel.AutoSize = true;
-            checkBoxDividendDiscountModel.Location = new Point(627, 37);
-            checkBoxDividendDiscountModel.Name = "checkBoxDividendDiscountModel";
-            checkBoxDividendDiscountModel.Size = new Size(82, 19);
-            checkBoxDividendDiscountModel.TabIndex = 8;
-            checkBoxDividendDiscountModel.Text = "checkBox4";
-            checkBoxDividendDiscountModel.UseVisualStyleBackColor = true;
+            checkBoxDDM.AutoSize = true;
+            checkBoxDDM.Location = new Point(627, 37);
+            checkBoxDDM.Name = "checkBoxDDM";
+            checkBoxDDM.Size = new Size(53, 19);
+            checkBoxDDM.TabIndex = 8;
+            checkBoxDDM.Text = "DDM";
+            checkBoxDDM.UseVisualStyleBackColor = true;
             // 
             // btnCalculate
             // 
@@ -157,16 +159,32 @@
             comboBoxFrequency.Size = new Size(121, 23);
             comboBoxFrequency.TabIndex = 11;
             // 
+            // dateTimePickerStart
+            // 
+            dateTimePickerStart.Location = new Point(176, 69);
+            dateTimePickerStart.Name = "dateTimePickerStart";
+            dateTimePickerStart.Size = new Size(96, 23);
+            dateTimePickerStart.TabIndex = 12;
+            // 
+            // dateTimePickerEnd
+            // 
+            dateTimePickerEnd.Location = new Point(278, 69);
+            dateTimePickerEnd.Name = "dateTimePickerEnd";
+            dateTimePickerEnd.Size = new Size(91, 23);
+            dateTimePickerEnd.TabIndex = 13;
+            // 
             // Form1
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
             BackColor = Color.DarkGray;
             ClientSize = new Size(918, 495);
+            Controls.Add(dateTimePickerEnd);
+            Controls.Add(dateTimePickerStart);
             Controls.Add(comboBoxFrequency);
             Controls.Add(dataGridView_analyze);
             Controls.Add(btnCalculate);
-            Controls.Add(checkBoxDividendDiscountModel);
+            Controls.Add(checkBoxDDM);
             Controls.Add(checkBoxDCF);
             Controls.Add(checkBoxPBRatio);
             Controls.Add(checkBoxPERatio);
@@ -193,9 +211,11 @@
         private CheckBox checkBoxPERatio;
         private CheckBox checkBoxPBRatio;
         private CheckBox checkBoxDCF;
-        private CheckBox checkBoxDividendDiscountModel;
+        private CheckBox checkBoxDDM;
         private Button btnCalculate;
         private DataGridView dataGridView_analyze;
         private ComboBox comboBoxFrequency;
+        private DateTimePicker dateTimePickerStart;
+        private DateTimePicker dateTimePickerEnd;
     }
 }
