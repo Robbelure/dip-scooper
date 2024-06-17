@@ -12,19 +12,17 @@ namespace DipScooper
     public class ApiClient
     {
         private readonly HttpClient _client;
-        //private readonly string _apiKey = "4N6LJVG58HJN7M7G";  // Din API-nøkkel
-        private readonly string _apiKey = "IUD16LLDLEU871KJ";
-        private readonly string _baseUrl = "https://www.alphavantage.co/query";
+        private readonly string _apiKey = "tV1cMGsjpXHTjbTpyLHJ_45W2ucj_eSF";  // Ny Polygon API-nøkkel
+        private readonly string _baseUrl = "https://api.polygon.io";
 
         public ApiClient()
         {
-            _client = new HttpClient(); 
+            _client = new HttpClient();
         }
 
-        // Method to fetch daily time series data
-        public async Task<string> GetDailyTimeSeriesAsync(string symbol, string outputsize = "compact")
+        public async Task<string> GetTimeSeriesAsync(string symbol, string startDate, string endDate)
         {
-            var url = $"{_baseUrl}?function=TIME_SERIES_DAILY&symbol={symbol}&outputsize={outputsize}&apikey={_apiKey}";
+            var url = $"{_baseUrl}/v2/aggs/ticker/{symbol}/range/1/day/{startDate}/{endDate}?adjusted=true&apiKey={_apiKey}";
             try
             {
                 HttpResponseMessage response = await _client.GetAsync(url);
@@ -34,149 +32,227 @@ namespace DipScooper
             }
             catch (HttpRequestException e)
             {
-                Debug.WriteLine($"An error occurred while fetching stock data: {e.Message}");
+                Debug.WriteLine($"An error occurred while fetching data: {e.Message}");
                 return null;
             }
         }
 
-        public async Task<string> GetTimeSeriesAsync(string symbol, string outputsize, string frequency)
+        public async Task<double> GetLatestMarketPriceAsync(string symbol)
         {
-            string function;
-            switch (frequency.ToLower())
-            {
-                case "weekly":
-                    function = "TIME_SERIES_WEEKLY";
-                    break;
-                case "monthly":
-                    function = "TIME_SERIES_MONTHLY";
-                    break;
-                case "daily":
-                default:
-                    function = "TIME_SERIES_DAILY";
-                    break;
-            }
-
-            var url = $"{_baseUrl}?function={function}&symbol={symbol}&outputsize={outputsize}&apikey={_apiKey}";
-            try
-            {
-                HttpResponseMessage response = await _client.GetAsync(url);
-                response.EnsureSuccessStatusCode();
-                string responseBody = await response.Content.ReadAsStringAsync();
-                return responseBody;
-            }
-            catch (HttpRequestException e)
-            {
-                Debug.WriteLine($"An error occurred while fetching stock data: {e.Message}");
-                return null;
-            }
-        }
-
-        // Method to fetch EPS data
-        public async Task<double> GetEarningsPerShareAsync(string symbol)
-        {
-            var url = $"{_baseUrl}?function=EARNINGS&symbol={symbol}&apikey={_apiKey}";
+            var url = $"{_baseUrl}/v2/aggs/ticker/{symbol}/prev?apiKey={_apiKey}";
             try
             {
                 HttpResponseMessage response = await _client.GetAsync(url);
                 response.EnsureSuccessStatusCode();
                 string responseBody = await response.Content.ReadAsStringAsync();
 
-                // Logge hele JSON-responsen for å inspisere strukturen
-                Debug.WriteLine("JSON response: ");
-                Debug.WriteLine(responseBody);
+                // Log JSON response for debugging
+                Debug.WriteLine("Market Price JSON response: " + responseBody);
 
-                using (var jsonDocument = JsonDocument.Parse(responseBody))
+                var jsonDocument = JsonDocument.Parse(responseBody);
+                var results = jsonDocument.RootElement.GetProperty("results");
+
+                if (results.GetArrayLength() > 0)
                 {
-                    var root = jsonDocument.RootElement.GetProperty("quarterlyEarnings");
+                    var latestData = results[0];
+                    double closePrice = latestData.GetProperty("c").GetDouble(); // Hent siste lukkepris (close)
 
-                    // Logge strukturen til 'quarterlyEarnings'
-                    Debug.WriteLine("quarterlyEarnings: ");
-                    Debug.WriteLine(root.ToString());
+                    // Log close price for debugging
+                    Debug.WriteLine($"Close Price for {symbol}: {closePrice}");
 
-                    if (root.GetArrayLength() == 0)
-                    {
-                        Debug.WriteLine("No quarterly earnings data found.");
-                        return 0.0;
-                    }
-
-                    var latestEpsElement = root[0].GetProperty("reportedEPS");
-
-                    // Logge typen av 'reportedEPS'
-                    Debug.WriteLine("reportedEPS Type: ");
-                    Debug.WriteLine(latestEpsElement.ValueKind.ToString());
-
-                    // Håndtere hvis 'reportedEPS' er en streng eller et tall
-                    if (latestEpsElement.ValueKind == JsonValueKind.String)
-                    {
-                        var latestEpsString = latestEpsElement.GetString();
-                        Debug.WriteLine("reportedEPS (String): ");
-                        Debug.WriteLine(latestEpsString);
-
-                        if (double.TryParse(latestEpsString, NumberStyles.Any, CultureInfo.InvariantCulture, out double latestEps))
-                        {
-                            return latestEps;
-                        }
-                        else
-                        {
-                            Debug.WriteLine("Error parsing EPS value.");
-                            return 0.0;
-                        }
-                    }
-                    else if (latestEpsElement.ValueKind == JsonValueKind.Number)
-                    {
-                        var latestEps = latestEpsElement.GetDouble();
-                        Debug.WriteLine("reportedEPS (Number): ");
-                        Debug.WriteLine(latestEps.ToString(CultureInfo.InvariantCulture));
-                        return latestEps;
-                    }
-                    else
-                    {
-                        Debug.WriteLine("Unexpected EPS value type.");
-                        return 0.0;
-                    }
+                    return closePrice;
+                }
+                else
+                {
+                    throw new Exception("No market price data found.");
                 }
             }
             catch (HttpRequestException e)
             {
-                Debug.WriteLine($"An error occurred while fetching EPS data: {e.Message}");
-                return 0.0;
-            }
-            catch (InvalidOperationException e)
-            {
-                Debug.WriteLine($"InvalidOperationException occurred: {e.Message}");
-                Debug.WriteLine($"Stack Trace: {e.StackTrace}");
+                Debug.WriteLine($"An error occurred while fetching market price: {e.Message}");
                 return 0.0;
             }
             catch (Exception e)
             {
                 Debug.WriteLine($"An unexpected error occurred: {e.Message}");
-                Debug.WriteLine($"Stack Trace: {e.StackTrace}");
                 return 0.0;
             }
         }
 
-        // Method to fetch BVPS data
         public async Task<double> GetBookValuePerShareAsync(string symbol)
         {
-            var url = $"{_baseUrl}?function=BALANCE_SHEET&symbol={symbol}&apikey={_apiKey}";
+            var url = $"{_baseUrl}/vX/reference/financials?ticker={symbol}&limit=1&timeframe=annual&apiKey={_apiKey}";
             try
             {
                 HttpResponseMessage response = await _client.GetAsync(url);
                 response.EnsureSuccessStatusCode();
                 string responseBody = await response.Content.ReadAsStringAsync();
 
-                using (var jsonDocument = JsonDocument.Parse(responseBody))
+                // Log JSON response for debugging
+                Debug.WriteLine("Financials JSON response: " + responseBody);
+
+                var jsonDocument = JsonDocument.Parse(responseBody);
+                var financials = jsonDocument.RootElement.GetProperty("results");
+
+                if (financials.GetArrayLength() > 0)
                 {
-                    var root = jsonDocument.RootElement.GetProperty("annualReports");
-                    var latestReport = root[0];
-                    double totalEquity = double.Parse(latestReport.GetProperty("totalShareholderEquity").GetString(), CultureInfo.InvariantCulture);
-                    double sharesOutstanding = double.Parse(latestReport.GetProperty("commonStockSharesOutstanding").GetString(), CultureInfo.InvariantCulture);
+                    var latestFinancial = financials[0];
+                    var balanceSheet = latestFinancial.GetProperty("financials").GetProperty("balance_sheet");
+                    double totalEquity = balanceSheet.GetProperty("equity").GetProperty("value").GetDouble();
+                    var incomeStatement = latestFinancial.GetProperty("financials").GetProperty("income_statement");
+                    double sharesOutstanding = incomeStatement.GetProperty("basic_average_shares").GetProperty("value").GetDouble();
+
                     return totalEquity / sharesOutstanding;
+                }
+                else
+                {
+                    throw new Exception("No financial data found.");
                 }
             }
             catch (HttpRequestException e)
             {
-                Debug.WriteLine($"An error occurred while fetching BVPS data: {e.Message}");
+                Debug.WriteLine($"An error occurred while fetching financial data: {e.Message}");
+                return 0.0;
+            }
+            catch (Exception e)
+            {
+                Debug.WriteLine($"An unexpected error occurred: {e.Message}");
+                return 0.0;
+            }
+        }
+
+        public async Task<List<double>> GetEPSAsync(string symbol, int limit = 1, string timeframe = "annual")
+        {
+            var url = $"{_baseUrl}/vX/reference/financials?ticker={symbol}&limit={limit}&timeframe={timeframe}&apiKey={_apiKey}";
+            try
+            {
+                HttpResponseMessage response = await _client.GetAsync(url);
+                response.EnsureSuccessStatusCode();
+                string responseBody = await response.Content.ReadAsStringAsync();
+
+                // Log JSON response for debugging
+                Debug.WriteLine("Financials JSON response: " + responseBody);
+
+                var jsonDocument = JsonDocument.Parse(responseBody);
+                var financials = jsonDocument.RootElement.GetProperty("results");
+
+                List<double> epsValues = new List<double>();
+
+                foreach (var financial in financials.EnumerateArray())
+                {
+                    var incomeStatement = financial.GetProperty("financials").GetProperty("income_statement");
+
+                    if (incomeStatement.TryGetProperty("basic_earnings_per_share", out JsonElement epsElement))
+                    {
+                        epsValues.Add(epsElement.GetProperty("value").GetDouble());
+                    }
+                    else
+                    {
+                        throw new Exception("No EPS data found for one or more periods.");
+                    }
+                }
+
+                return epsValues;
+            }
+            catch (HttpRequestException e)
+            {
+                Debug.WriteLine($"An error occurred while fetching financial data: {e.Message}");
+                return null;
+            }
+            catch (Exception e)
+            {
+                Debug.WriteLine($"An unexpected error occurred: {e.Message}");
+                return null;
+            }
+        }
+
+        public async Task<double> GetEarningsPerShareAsync(string symbol)
+        {
+            var epsValues = await GetEPSAsync(symbol, 1, "annual");
+            return epsValues != null && epsValues.Count > 0 ? epsValues[0] : 0.0;
+        }
+
+        public async Task<List<double>> GetTrailingEPSAsync(string symbol)
+        {
+            return await GetEPSAsync(symbol, 4, "quarterly");
+        }
+
+        public async Task<List<double>> GetCashFlowsAsync(string symbol)
+        {
+            var url = $"{_baseUrl}/vX/reference/financials?ticker={symbol}&limit=5&timeframe=annual&apiKey={_apiKey}";
+            try
+            {
+                HttpResponseMessage response = await _client.GetAsync(url);
+                response.EnsureSuccessStatusCode();
+                string responseBody = await response.Content.ReadAsStringAsync();
+
+                // Log JSON response for debugging
+                Debug.WriteLine("Financials JSON response: " + responseBody);
+
+                var jsonDocument = JsonDocument.Parse(responseBody);
+                var financials = jsonDocument.RootElement.GetProperty("results");
+
+                if (financials.GetArrayLength() > 0)
+                {
+                    List<double> cashFlows = new List<double>();
+                    foreach (var financial in financials.EnumerateArray())
+                    {
+                        var cashFlowStatement = financial.GetProperty("financials").GetProperty("cash_flow_statement");
+                        double netCashFlow = cashFlowStatement.GetProperty("net_cash_flow").GetProperty("value").GetDouble();
+                        cashFlows.Add(netCashFlow);
+                    }
+                    return cashFlows;
+                }
+                else
+                {
+                    throw new Exception("No financial data found.");
+                }
+            }
+            catch (HttpRequestException e)
+            {
+                Debug.WriteLine($"An error occurred while fetching cash flow data: {e.Message}");
+                return new List<double>();
+            }
+            catch (Exception e)
+            {
+                Debug.WriteLine($"An unexpected error occurred: {e.Message}");
+                return new List<double>();
+            }
+        }
+
+        public async Task<double> GetLastDividendAsync(string symbol)
+        {
+            var url = $"{_baseUrl}/v2/reference/dividends/{symbol}?apiKey={_apiKey}";
+            try
+            {
+                HttpResponseMessage response = await _client.GetAsync(url);
+                response.EnsureSuccessStatusCode();
+                string responseBody = await response.Content.ReadAsStringAsync();
+
+                // Log JSON response for debugging
+                Debug.WriteLine("Dividends JSON response: " + responseBody);
+
+                var jsonDocument = JsonDocument.Parse(responseBody);
+                var results = jsonDocument.RootElement.GetProperty("results");
+
+                if (results.GetArrayLength() > 0)
+                {
+                    var latestDividend = results[0];
+                    return latestDividend.GetProperty("amount").GetDouble(); // Returner siste utbyttebeløp
+                }
+                else
+                {
+                    throw new Exception("No dividend data found.");
+                }
+            }
+            catch (HttpRequestException e)
+            {
+                Debug.WriteLine($"An error occurred while fetching dividend data: {e.Message}");
+                return 0.0;
+            }
+            catch (Exception e)
+            {
+                Debug.WriteLine($"An unexpected error occurred: {e.Message}");
                 return 0.0;
             }
         }
