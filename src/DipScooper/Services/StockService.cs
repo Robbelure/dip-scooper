@@ -26,7 +26,7 @@ namespace DipScooper.Services
             ddmCalculator = new DDMCalculator();
         }
 
-        public async Task CalculatePERatio(string symbol, DataTable dataTable)
+        public async Task CalculatePERatio(string symbol, DataGridView dataGridView_analyze)
         {
             double marketPrice = await apiClient.GetLatestMarketPriceAsync(symbol);
             double earningsPerShare = await apiClient.GetEarningsPerShareAsync(symbol);
@@ -37,10 +37,9 @@ namespace DipScooper.Services
             }
 
             double peRatio = peRatioCalculator.Calculate(marketPrice, earningsPerShare);
-            DataRow rowPERatio = dataTable.NewRow();
-            rowPERatio["Calculation"] = "P/E Ratio";
-            rowPERatio["Result"] = peRatio;
-            dataTable.Rows.Add(rowPERatio);
+            var rowPERatio = new DataGridViewRow();
+            rowPERatio.CreateCells(dataGridView_analyze, "P/E Ratio", peRatio);
+            dataGridView_analyze.Rows.Add(rowPERatio);
 
             List<double> trailingEPS = await apiClient.GetTrailingEPSAsync(symbol);
             if (trailingEPS == null || trailingEPS.Count < 4)
@@ -49,13 +48,11 @@ namespace DipScooper.Services
             }
             double totalEPS = trailingEPS.Sum();
             double trailingPERatio = marketPrice / totalEPS;
-            DataRow rowTrailingPERatio = dataTable.NewRow();
-            rowTrailingPERatio["Calculation"] = "Trailing P/E Ratio";
-            rowTrailingPERatio["Result"] = trailingPERatio;
-            dataTable.Rows.Add(rowTrailingPERatio);
+            var rowTrailingPERatio = new DataGridViewRow();
+            rowTrailingPERatio.CreateCells(dataGridView_analyze, "Trailing P/E Ratio", trailingPERatio);
+            dataGridView_analyze.Rows.Add(rowTrailingPERatio);
         }
-
-        public async Task CalculatePBRatio(string symbol, DataTable dataTable)
+        public async Task CalculatePBRatio(string symbol, DataGridView dataGridView_analyze)
         {
             double marketPrice = await apiClient.GetLatestMarketPriceAsync(symbol);
             double bookValuePerShare = await apiClient.GetBookValuePerShareAsync(symbol);
@@ -66,13 +63,11 @@ namespace DipScooper.Services
             }
 
             double pbRatio = pbRatioCalculator.Calculate(marketPrice, bookValuePerShare);
-            DataRow rowPBRatio = dataTable.NewRow();
-            rowPBRatio["Calculation"] = "P/B Ratio";
-            rowPBRatio["Result"] = pbRatio;
-            dataTable.Rows.Add(rowPBRatio);
+            var rowPBRatio = new DataGridViewRow();
+            rowPBRatio.CreateCells(dataGridView_analyze, "P/B Ratio", pbRatio);
+            dataGridView_analyze.Rows.Add(rowPBRatio);
         }
-
-        public async Task CalculateDCF(string symbol, DataTable dataTable, double discountRate)
+        public async Task CalculateDCF(string symbol, DataGridView dataGridView_analyze, double discountRate)
         {
             List<CashFlowResponse> cashFlows = await apiClient.GetCashFlowsAsync(symbol);
             if (cashFlows == null || cashFlows.Count == 0)
@@ -80,15 +75,13 @@ namespace DipScooper.Services
                 throw new Exception("No cash flow data available.");
             }
 
-            List<double> cashFlowValues = cashFlows.Select(cf => cf.NetCashFlow).ToList();
-            double dcfValue = dcfCalculator.Calculate(cashFlowValues, discountRate);
-            DataRow rowDCF = dataTable.NewRow();
-            rowDCF["Calculation"] = "DCF Value";
-            rowDCF["Result"] = dcfValue;
-            dataTable.Rows.Add(rowDCF);
+            double dcfValue = dcfCalculator.Calculate(cashFlows.Select(cf => cf.NetCashFlow).ToList(), discountRate);
+            var rowDCF = new DataGridViewRow();
+            rowDCF.CreateCells(dataGridView_analyze, "DCF Value", dcfValue);
+            dataGridView_analyze.Rows.Add(rowDCF);
         }
 
-        public async Task CalculateDDM(string symbol, DataTable dataTable, double growthRate, double discountRate)
+        public async Task CalculateDDM(string symbol, DataGridView dataGridView_analyze, double growthRate, double discountRate)
         {
             double lastDividend = await apiClient.GetLastDividendAsync(symbol);
             if (lastDividend == 0)
@@ -97,10 +90,9 @@ namespace DipScooper.Services
             }
 
             double ddmValue = ddmCalculator.Calculate(lastDividend, growthRate, discountRate);
-            DataRow row = dataTable.NewRow();
-            row["Calculation"] = "Dividend Discount Model Value";
-            row["Result"] = ddmValue;
-            dataTable.Rows.Add(row);
+            var row = new DataGridViewRow();
+            row.CreateCells(dataGridView_analyze, "Dividend Discount Model Value", ddmValue);
+            dataGridView_analyze.Rows.Add(row);
         }
     }
 }
