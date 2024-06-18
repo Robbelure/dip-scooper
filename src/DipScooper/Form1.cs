@@ -4,18 +4,21 @@ using System.Text.Json;
 using System.Globalization;
 using System.Diagnostics;
 using System.Windows.Forms;
+using DipScooper.Calculators;
+using DipScooper.Services;
 
 namespace DipScooper
 {
     public partial class Form1 : Form
     {
-        private StockCalculator stockCalculator;
         private ApiClient apiClient;
+        private StockService stockService;
+
         public Form1()
         {
             InitializeComponent();
-            stockCalculator = new StockCalculator();
             apiClient = new ApiClient();
+            stockService = new StockService();
         }
 
         private async void btnCalculate_Click(object sender, EventArgs e)
@@ -46,90 +49,23 @@ namespace DipScooper
             {
                 if (checkBoxPERatio.Checked)
                 {
-                    double marketPrice = await apiClient.GetLatestMarketPriceAsync(symbol);
-                    double earningsPerShare = await apiClient.GetEarningsPerShareAsync(symbol);
-
-                    if (earningsPerShare == 0)
-                    {
-                        MessageBox.Show("EPS data not available.");
-                        return;
-                    }
-
-                    double peRatio = stockCalculator.CalculatePERatio(marketPrice, earningsPerShare);
-                    DataRow rowPERatio = dataTable.NewRow();
-                    rowPERatio["Calculation"] = "P/E Ratio";
-                    rowPERatio["Result"] = peRatio;
-                    dataTable.Rows.Add(rowPERatio);
-
-                    // Beregning av Trailing P/E Ratio
-                    List<double> trailingEPS = await apiClient.GetTrailingEPSAsync(symbol);
-                    if (trailingEPS == null || trailingEPS.Count < 4)
-                    {
-                        MessageBox.Show("Not enough EPS data available for trailing P/E.");
-                        return;
-                    }
-                    double totalEPS = trailingEPS.Sum();
-                    double trailingPERatio = marketPrice / totalEPS;
-                    DataRow rowTrailingPERatio = dataTable.NewRow();
-                    rowTrailingPERatio["Calculation"] = "Trailing P/E Ratio";
-                    rowTrailingPERatio["Result"] = trailingPERatio;
-                    dataTable.Rows.Add(rowTrailingPERatio);
+                    await stockService.CalculatePERatio(symbol, dataTable);
                 }
 
                 if (checkBoxPBRatio.Checked)
                 {
-                    double marketPrice = await apiClient.GetLatestMarketPriceAsync(symbol);
-                    double bookValuePerShare = await apiClient.GetBookValuePerShareAsync(symbol);
-
-                    if (bookValuePerShare == 0)
-                    {
-                        MessageBox.Show("Book value per share data not available.");
-                        return;
-                    }
-
-                    double pbRatio = stockCalculator.CalculatePBRatio(marketPrice, bookValuePerShare);
-                    DataRow rowPBRatio = dataTable.NewRow();
-                    rowPBRatio["Calculation"] = "P/B Ratio";
-                    rowPBRatio["Result"] = pbRatio;
-                    dataTable.Rows.Add(rowPBRatio);
+                    await stockService.CalculatePBRatio(symbol, dataTable);
                 }
 
                 if (checkBoxDCF.Checked)
                 {
-                    List<double> cashFlows = await apiClient.GetCashFlowsAsync(symbol);
-                    Debug.WriteLine($"Cash Flows for {symbol}: {string.Join(", ", cashFlows)}");
-
-                    if (cashFlows == null || cashFlows.Count == 0)
-                    {
-                        MessageBox.Show("No cash flow data available.");
-                        return;
-                    }
-
-
-                    double dcfValue = stockCalculator.CalculateDCF(cashFlows, discountRate);
-                    DataRow rowDCF = dataTable.NewRow();
-                    rowDCF["Calculation"] = "DCF Value";
-                    rowDCF["Result"] = dcfValue;
-                    dataTable.Rows.Add(rowDCF);
+                    await stockService.CalculateDCF(symbol, dataTable, discountRate);
                 }
 
                 if (checkBoxDDM.Checked)
                 {
-                    double lastDividend = await apiClient.GetLastDividendAsync(symbol);
-                    if (lastDividend == 0)
-                    {
-                        MessageBox.Show("Dividend data not available.");
-                        return;
-                    }
-
-                    double ddmValue = stockCalculator.CalculateDDM(lastDividend, growthRate, discountRate);
-
-                    DataRow row = dataTable.NewRow();
-                    row["Calculation"] = "Dividend Discount Model Value";
-                    row["Result"] = ddmValue;
-                    dataTable.Rows.Add(row);
+                    await stockService.CalculateDDM(symbol, dataTable, growthRate, discountRate);
                 }
-
 
                 dataGridView_analyze.DataSource = dataTable;
             }
@@ -191,14 +127,14 @@ namespace DipScooper
                 foreach (var result in root.EnumerateArray())
                 {
                     var row = dataTable.NewRow();
-                    long timestamp = result.GetProperty("t").GetInt64();  // Hent timestamp som en long
-                    DateTime date = DateTimeOffset.FromUnixTimeMilliseconds(timestamp).DateTime;  // Konverter timestamp til DateTime
-                    row["Date"] = date.ToString("yyyy-MM-dd");  // Formatér dato som string
+                    long timestamp = result.GetProperty("t").GetInt64();
+                    DateTime date = DateTimeOffset.FromUnixTimeMilliseconds(timestamp).DateTime;
+                    row["Date"] = date.ToString("yyyy-MM-dd");
                     row["Open"] = result.GetProperty("o").GetDouble();
                     row["High"] = result.GetProperty("h").GetDouble();
                     row["Low"] = result.GetProperty("l").GetDouble();
                     row["Close"] = result.GetProperty("c").GetDouble();
-                    row["Volume"] = result.GetProperty("v").GetDouble();  // Antar at volum kan være et stort tall, så bruk GetDouble() hvis nødvendig
+                    row["Volume"] = result.GetProperty("v").GetDouble();
                     dataTable.Rows.Add(row);
                 }
 
@@ -212,7 +148,6 @@ namespace DipScooper
             }
         }
 
-        // timer for lblStatus
         private void TimerStatus_Tick(object sender, EventArgs e)
         {
             lblStatus.Text = string.Empty;

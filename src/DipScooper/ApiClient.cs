@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
+using DipScooper.Models.ApiResponseModels;
 
 namespace DipScooper
 {
@@ -177,7 +178,7 @@ namespace DipScooper
             return await GetEPSAsync(symbol, 4, "quarterly");
         }
 
-        public async Task<List<double>> GetCashFlowsAsync(string symbol)
+        public async Task<List<CashFlowResponse>> GetCashFlowsAsync(string symbol)
         {
             var url = $"{_baseUrl}/vX/reference/financials?ticker={symbol}&limit=5&timeframe=annual&apiKey={_apiKey}";
             try
@@ -194,12 +195,14 @@ namespace DipScooper
 
                 if (financials.GetArrayLength() > 0)
                 {
-                    List<double> cashFlows = new List<double>();
+                    List<CashFlowResponse> cashFlows = new List<CashFlowResponse>();
                     foreach (var financial in financials.EnumerateArray())
                     {
                         var cashFlowStatement = financial.GetProperty("financials").GetProperty("cash_flow_statement");
                         double netCashFlow = cashFlowStatement.GetProperty("net_cash_flow").GetProperty("value").GetDouble();
-                        cashFlows.Add(netCashFlow);
+                        //cashFlows.Add(netCashFlow);
+                        DateTime date = financial.GetProperty("start_date").GetDateTime();  // Eksempel på å hente datoen
+                        cashFlows.Add(new CashFlowResponse { NetCashFlow = netCashFlow, Date = date });
                     }
                     return cashFlows;
                 }
@@ -211,12 +214,12 @@ namespace DipScooper
             catch (HttpRequestException e)
             {
                 Debug.WriteLine($"An error occurred while fetching cash flow data: {e.Message}");
-                return new List<double>();
+                return new List<CashFlowResponse>();
             }
             catch (Exception e)
             {
                 Debug.WriteLine($"An unexpected error occurred: {e.Message}");
-                return new List<double>();
+                return new List<CashFlowResponse>();
             }
         }
 
