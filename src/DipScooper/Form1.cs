@@ -6,6 +6,8 @@ using System.Diagnostics;
 using System.Windows.Forms;
 using DipScooper.Calculators;
 using DipScooper.Services;
+using System.ComponentModel;
+using DevExpress.XtraCharts;
 
 namespace DipScooper
 {
@@ -23,10 +25,7 @@ namespace DipScooper
             InitializeDateTimePicker(dateTimePickerStart);
             InitializeDateTimePicker(dateTimePickerEnd);
 
-            // Sett placeholder-tekst
             SetPlaceholderText(textBoxSearch, "Enter ticker symbol (example: Tesla = TSLA)");
-
-            // Event handlers for focusing and unfocusing
             textBoxSearch.GotFocus += RemovePlaceholderText;
             textBoxSearch.LostFocus += ShowPlaceholderText;
 
@@ -34,7 +33,315 @@ namespace DipScooper
             InitializeDataGridViewStocksColumns();
             dataGridView_analyze.AutoGenerateColumns = false;
             InitializeDataGridViewAnalyzeColumns();
+
+            // Konfigurer BackgroundWorker
+            backgroundWorker_search.WorkerReportsProgress = true;
+            backgroundWorker_search.DoWork += new DoWorkEventHandler(backgroundWorker_search_DoWork);
+            backgroundWorker_search.ProgressChanged += new ProgressChangedEventHandler(backgroundWorker_search_ProgressChanged);
+            backgroundWorker_search.RunWorkerCompleted += new RunWorkerCompletedEventHandler(backgroundWorker_search_RunWorkerCompleted);
+
+            InitializeChartControl();
         }
+
+        private async void btnCalculate_Click(object sender, EventArgs e)
+        {
+            string symbol = textBoxSearch.Text.Trim();
+            if (string.IsNullOrEmpty(symbol))
+            {
+                MessageBox.Show("Please enter a valid stock symbol.");
+                return;
+            }
+
+            double discountRate = 0.1;
+            double growthRate = 0.05;
+
+            dataGridView_analyze.Rows.Clear();
+
+            /*
+            DataTable dataTable;
+            if (dataGridView_analyze.DataSource == null)
+            {
+                dataTable = new DataTable();
+                dataTable.Columns.Add("Calculation", typeof(string));
+                dataTable.Columns.Add("Result", typeof(double));
+            }
+            else
+            {
+                dataTable = (DataTable)dataGridView_analyze.DataSource;
+            }
+            */
+            try
+            {
+                if (checkBoxPERatio.Checked)
+                {
+                    await stockService.CalculatePERatio(symbol, dataGridView_analyze);
+                }
+
+                if (checkBoxPBRatio.Checked)
+                {
+                    await stockService.CalculatePBRatio(symbol, dataGridView_analyze);
+                }
+
+                if (checkBoxDCF.Checked)
+                {
+                    await stockService.CalculateDCF(symbol, dataGridView_analyze, discountRate);
+                }
+
+                if (checkBoxDDM.Checked)
+                {
+                    await stockService.CalculateDDM(symbol, dataGridView_analyze, growthRate, discountRate);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error performing calculations: {ex.Message}\nStackTrace: {ex.StackTrace}");
+                Debug.WriteLine($"Error performing calculations: {ex.Message}\nStackTrace: {ex.StackTrace}");
+            }
+        }
+
+        private void BtnSearch_Click(object sender, EventArgs e)
+        {
+            string symbol = textBoxSearch.Text.Trim().ToUpper();
+            if (string.IsNullOrEmpty(symbol))
+            {
+                MessageBox.Show("Please enter a valid stock symbol.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+            if (!backgroundWorker_search.IsBusy)
+            {
+                progressBar_search.Value = 0;
+                progressBar_search.Visible = true;
+                lblStatus.Text = "Searching...";
+                lblStatus.ForeColor = System.Drawing.Color.Blue;
+                dataGridView_stocks.Rows.Clear(); // Clear existing rows
+                backgroundWorker_search.RunWorkerAsync(textBoxSearch.Text.Trim());
+            }
+        }
+
+        private List<DataGridViewRow> ProcessJsonData(string jsonData)
+        {
+            if (string.IsNullOrEmpty(jsonData))
+            {
+                throw new ArgumentException("JSON data is null or empty.");
+            }
+
+            var jsonDocument = JsonDocument.Parse(jsonData);
+            var root = jsonDocument.RootElement.GetProperty("results");
+            List<DataGridViewRow> rows = new List<DataGridViewRow>();
+
+            foreach (var result in root.EnumerateArray())
+            {
+                var row = new DataGridViewRow();
+                row.CreateCells(dataGridView_stocks);
+
+                long timestamp = result.GetProperty("t").GetInt64();
+                DateTime date = DateTimeOffset.FromUnixTimeMilliseconds(timestamp).DateTime;
+                row.Cells[0].Value = date.ToString("yyyy-MM-dd");
+                row.Cells[1].Value = result.GetProperty("o").GetDouble();
+                row.Cells[2].Value = result.GetProperty("h").GetDouble();
+                row.Cells[3].Value = result.GetProperty("l").GetDouble();
+                row.Cells[4].Value = result.GetProperty("c").GetDouble();
+                row.Cells[5].Value = result.GetProperty("v").GetDouble();
+
+                rows.Add(row);
+            }
+
+            return rows;
+        }
+
+        private void InitializeChartControl()
+        {
+            // Initialiser ChartControl
+            chartControlStocks.Series.Clear();
+
+            Series closeSeries = new Series("Close", ViewType.Line);
+            Series volumeSeries = new Series("Volume", ViewType.Bar);
+            Series rsiSeries = new Series("RSI", ViewType.Line);
+
+            chartControlStocks.Series.Add(closeSeries);
+            chartControlStocks.Series.Add(volumeSeries);
+            chartControlStocks.Series.Add(rsiSeries);
+
+            // Juster farger og utseende på seriene
+            ((LineSeriesView)closeSeries.View).Color = Color.Blue;
+            ((BarSeriesView)volumeSeries.View).Color = Color.Red;
+            ((LineSeriesView)rsiSeries.View).Color = Color.Black;
+
+            XYDiagram diagram = (XYDiagram)chartControlStocks.Diagram;
+
+            // Juster Y-akse for Volume
+            SecondaryAxisY secondaryAxisYVolume = new SecondaryAxisY("Volume Axis");
+            diagram.SecondaryAxesY.Add(secondaryAxisYVolume);
+            ((BarSeriesView)volumeSeries.View).AxisY = secondaryAxisYVolume;
+
+            // Juster Y-akse for RSI
+            SecondaryAxisY secondaryAxisYRSI = new SecondaryAxisY("RSI Axis");
+            diagram.SecondaryAxesY.Add(secondaryAxisYRSI);
+            ((LineSeriesView)rsiSeries.View).AxisY = secondaryAxisYRSI;
+
+            // Sett tittel og akseetiketter
+            chartControlStocks.Titles.Clear();
+            ChartTitle chartTitle = new ChartTitle();
+            chartTitle.Text = "Stock Data Chart";
+            chartControlStocks.Titles.Add(chartTitle);
+
+            diagram.AxisX.Title.Text = "Date";
+            diagram.AxisX.Title.Visibility = DevExpress.Utils.DefaultBoolean.True;
+            diagram.AxisY.Title.Text = "Price";
+            diagram.AxisY.Title.Visibility = DevExpress.Utils.DefaultBoolean.True;
+
+            //secondaryAxisYVolume.Title.Text = "Volume";
+            //secondaryAxisYVolume.Title.Visibility = DevExpress.Utils.DefaultBoolean.True;
+
+            //secondaryAxisYRSI.Title.Text = "RSI";
+            //secondaryAxisYRSI.Title.Visibility = DevExpress.Utils.DefaultBoolean.True;
+
+            chartControlStocks.Legend.Visibility = DevExpress.Utils.DefaultBoolean.True;
+        }
+
+        private void UpdateChartWithData()
+        {
+            if (dataGridView_stocks.Rows.Count == 0)
+                return;
+
+            Series closeSeries = chartControlStocks.Series["Close"];
+            Series volumeSeries = chartControlStocks.Series["Volume"];
+            Series rsiSeries = chartControlStocks.Series["RSI"];
+
+            closeSeries.Points.Clear();
+            volumeSeries.Points.Clear();
+            rsiSeries.Points.Clear();
+
+            List<double> closePrices = new List<double>();
+            List<DateTime> dates = new List<DateTime>();
+
+            foreach (DataGridViewRow row in dataGridView_stocks.Rows)
+            {
+                if (row.Cells["Date"].Value != null)
+                {
+                    DateTime date = DateTime.Parse(row.Cells["Date"].Value.ToString());
+                    double closePrice = Convert.ToDouble(row.Cells["Close"].Value);
+                    double volume = Convert.ToDouble(row.Cells["Volume"].Value);
+
+                    // Legg til dato og lukkepris til listene
+                    dates.Add(date);
+                    closePrices.Add(closePrice);
+
+                    closeSeries.Points.Add(new SeriesPoint(date, closePrice));
+                    volumeSeries.Points.Add(new SeriesPoint(date, volume));
+
+                    closePrices.Add(closePrice);
+                }
+            }
+
+            // Beregn og legg til RSI
+            List<double> rsiValues = stockService.CalculateRSI(closePrices);
+            for (int i = 0; i < rsiValues.Count; i++)
+            {
+                if (i < dates.Count)
+                {
+                    rsiSeries.Points.Add(new SeriesPoint(dates[i], rsiValues[i]));
+                }
+            }
+
+            chartControlStocks.Refresh();
+        }
+
+        private void backgroundWorker_search_DoWork(object sender, DoWorkEventArgs e)
+        {
+            // Hent inn verdier fra UI-tråden
+            string symbol = (string)e.Argument;
+            if (string.IsNullOrEmpty(symbol))
+            {
+                throw new ArgumentException("Please enter a valid stock symbol.");
+            }// vi sender symbolet som et argument
+            string startDate = dateTimePickerStart.Invoke(new Func<string>(() => dateTimePickerStart.Value.ToString("yyyy-MM-dd")));
+            string endDate = dateTimePickerEnd.Invoke(new Func<string>(() => dateTimePickerEnd.Value.ToString("yyyy-MM-dd")));
+
+            try
+            {
+                // Asynkrone operasjoner gjøres synkront ved å bruke Task.Run og Result
+                string jsonData = Task.Run(async () => await apiClient.GetTimeSeriesAsync(symbol, startDate, endDate)).Result;
+
+                if (string.IsNullOrEmpty(jsonData))
+                {
+                    throw new Exception("No data retrieved from the API.");
+                }
+
+                // Prosessér dataen
+                var rows = ProcessJsonData(jsonData);
+
+                // Rapporter fremdrift
+                int totalRecords = rows.Count;
+                for (int i = 0; i < totalRecords; i++)
+                {
+                    backgroundWorker_search.ReportProgress((i + 1) * 100 / totalRecords, rows[i]);
+                }
+
+                // Lagre resultatet
+                e.Result = rows;
+            }
+            catch (Exception ex)
+            {
+                // Håndter eventuelle feil
+                e.Result = ex;
+            }
+        }
+
+        private void backgroundWorker_search_ProgressChanged(object sender, ProgressChangedEventArgs e)
+        {
+            progressBar_search.Value = e.ProgressPercentage;
+            if (e.UserState is DataGridViewRow row)
+            {
+                dataGridView_stocks.Rows.Add(row);
+            }
+        }
+
+        private void backgroundWorker_search_RunWorkerCompleted(object sender, RunWorkerCompletedEventArgs e)
+        {
+            if (e.Error != null || e.Result is Exception)
+            {
+                string? errorMessage = e.Error != null ? e.Error.Message : (e.Result as Exception)?.Message;
+                lblStatus.Text = errorMessage;
+                lblStatus.ForeColor = System.Drawing.Color.Red;
+            }
+            else
+            {
+                var rows = e.Result as List<DataGridViewRow>;
+                if (rows != null)
+                {
+                    foreach (var row in rows)
+                    {
+                        var newRow = new DataGridViewRow();
+                        newRow.CreateCells(dataGridView_stocks, row.Cells[0].Value, row.Cells[1].Value, row.Cells[2].Value, row.Cells[3].Value, row.Cells[4].Value, row.Cells[5].Value);
+                        dataGridView_stocks.Rows.Add(newRow);
+                    }
+                    lblStatus.Text = "Data loaded successfully.";
+                    lblStatus.ForeColor = System.Drawing.Color.Green;
+
+                    UpdateChartWithData();
+                }
+            }
+
+            // Fullfør progressbaren til 100 % før den blir usynlig
+            progressBar_search.Value = 100;
+            Task.Delay(500).ContinueWith(t =>
+            {
+                if (progressBar_search.InvokeRequired)
+                {
+                    progressBar_search.Invoke(new Action(() =>
+                    {
+                        progressBar_search.Visible = false;
+                    }));
+                }
+                else
+                {
+                    progressBar_search.Visible = false;
+                }
+            });
+            StartStatusTimer();
+        }
+
         private void InitializeDateTimePicker(DateTimePicker dateTimePicker)
         {
             dateTimePicker.Format = DateTimePickerFormat.Custom;
@@ -111,168 +418,6 @@ namespace DipScooper
             }
         }
 
-        private async void btnCalculate_Click(object sender, EventArgs e)
-        {
-            string symbol = textBoxSearch.Text.Trim();
-            if (string.IsNullOrEmpty(symbol))
-            {
-                MessageBox.Show("Please enter a valid stock symbol.");
-                return;
-            }
-
-            double discountRate = 0.1;
-            double growthRate = 0.05;
-
-            dataGridView_analyze.Rows.Clear();
-
-            /*
-            DataTable dataTable;
-            if (dataGridView_analyze.DataSource == null)
-            {
-                dataTable = new DataTable();
-                dataTable.Columns.Add("Calculation", typeof(string));
-                dataTable.Columns.Add("Result", typeof(double));
-            }
-            else
-            {
-                dataTable = (DataTable)dataGridView_analyze.DataSource;
-            }
-            */
-            try
-            {
-                if (checkBoxPERatio.Checked)
-                {
-                    await stockService.CalculatePERatio(symbol, dataGridView_analyze);
-                }
-
-                if (checkBoxPBRatio.Checked)
-                {
-                    await stockService.CalculatePBRatio(symbol, dataGridView_analyze);
-                }
-
-                if (checkBoxDCF.Checked)
-                {
-                    await stockService.CalculateDCF(symbol, dataGridView_analyze, discountRate);
-                }
-
-                if (checkBoxDDM.Checked)
-                {
-                    await stockService.CalculateDDM(symbol, dataGridView_analyze, growthRate, discountRate);
-                }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error performing calculations: {ex.Message}\nStackTrace: {ex.StackTrace}");
-                Debug.WriteLine($"Error performing calculations: {ex.Message}\nStackTrace: {ex.StackTrace}");
-            }
-        }
-
-        private async void BtnSearch_Click(object sender, EventArgs e)
-        {
-            lblStatus.Text = "Searching...";
-            lblStatus.ForeColor = System.Drawing.Color.Blue;
-            string symbol = textBoxSearch.Text.Trim();
-            string startDate = dateTimePickerStart.Value.ToString("yyyy-MM-dd");
-            string endDate = dateTimePickerEnd.Value.ToString("yyyy-MM-dd");
-
-            if (string.IsNullOrEmpty(symbol))
-            {
-                lblStatus.Text = "Please enter a valid stock symbol.";
-                lblStatus.ForeColor = System.Drawing.Color.Red;
-                StartStatusTimer();
-                return;
-            }
-
-            string jsonData = await apiClient.GetTimeSeriesAsync(symbol, startDate, endDate);
-
-            if (string.IsNullOrEmpty(jsonData))
-            {
-                lblStatus.Text = "Failed to retrieve data or symbol not found.";
-                lblStatus.ForeColor = System.Drawing.Color.Red;
-                StartStatusTimer();
-                return;
-            }
-
-            lblStatus.Text = "Data loaded successfully.";
-            lblStatus.ForeColor = System.Drawing.Color.Green;
-            StartStatusTimer();
-
-            UpdateDataGridView(jsonData);
-        }
-
-        private void UpdateDataGridView(string jsonData)
-        {
-            try
-            {
-                Debug.WriteLine(jsonData);
-                var jsonDocument = JsonDocument.Parse(jsonData);
-                var root = jsonDocument.RootElement.GetProperty("results");
-                var dataTable = new DataTable();
-                if (dataGridView_stocks.Columns.Count == 0)
-                {
-                    dataGridView_stocks.Columns.Add("Date", "Date");
-                    dataGridView_stocks.Columns.Add("Open", "Open");
-                    dataGridView_stocks.Columns.Add("High", "High");
-                    dataGridView_stocks.Columns.Add("Low", "Low");
-                    dataGridView_stocks.Columns.Add("Close", "Close");
-                    dataGridView_stocks.Columns.Add("Volume", "Volume");
-                }
-
-                dataGridView_stocks.Rows.Clear();
-
-                foreach (var result in root.EnumerateArray())
-                {
-                    var row = new DataGridViewRow();
-                    row.CreateCells(dataGridView_stocks);
-
-                    long timestamp = result.GetProperty("t").GetInt64();
-                    DateTime date = DateTimeOffset.FromUnixTimeMilliseconds(timestamp).DateTime;
-                    row.Cells[0].Value = date.ToString("yyyy-MM-dd");
-                    row.Cells[1].Value = result.GetProperty("o").GetDouble();
-                    row.Cells[2].Value = result.GetProperty("h").GetDouble();
-                    row.Cells[3].Value = result.GetProperty("l").GetDouble();
-                    row.Cells[4].Value = result.GetProperty("c").GetDouble();
-                    row.Cells[5].Value = result.GetProperty("v").GetDouble();
-
-                    dataGridView_stocks.Rows.Add(row);
-                }
-
-                /*
-                dataTable.Columns.Add("Date", typeof(string));
-                dataTable.Columns.Add("Open", typeof(double));
-                dataTable.Columns.Add("High", typeof(double));
-                dataTable.Columns.Add("Low", typeof(double));
-                dataTable.Columns.Add("Close", typeof(double));
-                dataTable.Columns.Add("Volume", typeof(long));
-                
-
-                foreach (var result in root.EnumerateArray())
-                {
-                    var row = dataTable.NewRow();
-                    long timestamp = result.GetProperty("t").GetInt64();
-                    DateTime date = DateTimeOffset.FromUnixTimeMilliseconds(timestamp).DateTime;
-                    row["Date"] = date.ToString("yyyy-MM-dd");
-                    row["Open"] = result.GetProperty("o").GetDouble();
-                    row["High"] = result.GetProperty("h").GetDouble();
-                    row["Low"] = result.GetProperty("l").GetDouble();
-                    row["Close"] = result.GetProperty("c").GetDouble();
-                    row["Volume"] = result.GetProperty("v").GetDouble();
-                    dataTable.Rows.Add(row);
-                }
-
-                dataGridView_stocks.DataSource = dataTable;
-                */
-
-
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine("Failed to parse JSON: " + jsonData);
-                lblStatus.Text = "Error parsing data: " + ex.Message;
-                lblStatus.ForeColor = System.Drawing.Color.Red;
-            }
-        }
-
         private void TimerStatus_Tick(object sender, EventArgs e)
         {
             lblStatus.Text = string.Empty;
@@ -286,7 +431,31 @@ namespace DipScooper
 
         private void Form1_Load(object sender, EventArgs e)
         {
-            //comboBoxFrequency.SelectedIndex = 0;
+            progressBar_search.Visible = false;
+        }
+
+
+
+        private void UpdateDataGridView(string jsonData)
+        {
+            try
+            {
+                Debug.WriteLine(jsonData);
+                var rows = ProcessJsonData(jsonData);
+
+                dataGridView_stocks.Rows.Clear();
+
+                foreach (var row in rows)
+                {
+                    dataGridView_stocks.Rows.Add(row);
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine("Failed to parse JSON: " + jsonData);
+                lblStatus.Text = "Error parsing data: " + ex.Message;
+                lblStatus.ForeColor = System.Drawing.Color.Red;
+            }
         }
     }
 }

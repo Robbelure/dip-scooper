@@ -52,12 +52,16 @@
             checkBoxDDM = new CheckBox();
             btnCalculate = new Button();
             dataGridView_analyze = new DataGridView();
-            dateTimePickerStart = new DateTimePicker();
-            dateTimePickerEnd = new DateTimePicker();
             CalculationColumn = new DataGridViewTextBoxColumn();
             ResultColumn = new DataGridViewTextBoxColumn();
+            dateTimePickerStart = new DateTimePicker();
+            dateTimePickerEnd = new DateTimePicker();
+            progressBar_search = new ProgressBar();
+            backgroundWorker_search = new System.ComponentModel.BackgroundWorker();
+            chartControlStocks = new DevExpress.XtraCharts.ChartControl();
             ((System.ComponentModel.ISupportInitialize)dataGridView_stocks).BeginInit();
             ((System.ComponentModel.ISupportInitialize)dataGridView_analyze).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)chartControlStocks).BeginInit();
             SuspendLayout();
             // 
             // dataGridView_stocks
@@ -85,7 +89,7 @@
             dataGridViewCellStyle2.WrapMode = DataGridViewTriState.False;
             dataGridView_stocks.DefaultCellStyle = dataGridViewCellStyle2;
             dataGridView_stocks.GridColor = Color.Gold;
-            dataGridView_stocks.Location = new Point(12, 68);
+            dataGridView_stocks.Location = new Point(12, 71);
             dataGridView_stocks.Name = "dataGridView_stocks";
             dataGridView_stocks.ReadOnly = true;
             dataGridViewCellStyle3.Alignment = DataGridViewContentAlignment.MiddleLeft;
@@ -98,7 +102,7 @@
             dataGridView_stocks.RowHeadersDefaultCellStyle = dataGridViewCellStyle3;
             dataGridView_stocks.RowHeadersVisible = false;
             dataGridView_stocks.RowTemplate.Height = 25;
-            dataGridView_stocks.Size = new Size(439, 164);
+            dataGridView_stocks.Size = new Size(439, 161);
             dataGridView_stocks.TabIndex = 1;
             // 
             // DateColumn
@@ -141,10 +145,11 @@
             // 
             BtnSearch.BackColor = Color.Black;
             BtnSearch.FlatStyle = FlatStyle.Flat;
+            BtnSearch.Font = new Font("Segoe UI Semibold", 9.75F, FontStyle.Bold, GraphicsUnit.Point);
             BtnSearch.ForeColor = Color.Gold;
-            BtnSearch.Location = new Point(12, 32);
+            BtnSearch.Location = new Point(12, 40);
             BtnSearch.Name = "BtnSearch";
-            BtnSearch.Size = new Size(114, 30);
+            BtnSearch.Size = new Size(114, 27);
             BtnSearch.TabIndex = 2;
             BtnSearch.Text = "Search";
             BtnSearch.UseVisualStyleBackColor = false;
@@ -152,10 +157,11 @@
             // 
             // lblStatus
             // 
+            lblStatus.Font = new Font("Bahnschrift", 9.75F, FontStyle.Regular, GraphicsUnit.Point);
             lblStatus.ForeColor = Color.Lime;
-            lblStatus.Location = new Point(196, 258);
+            lblStatus.Location = new Point(346, 20);
             lblStatus.Name = "lblStatus";
-            lblStatus.Size = new Size(255, 24);
+            lblStatus.Size = new Size(105, 24);
             lblStatus.TabIndex = 3;
             // 
             // textBoxSearch
@@ -177,9 +183,9 @@
             checkBoxPERatio.ForeColor = Color.Gold;
             checkBoxPERatio.Location = new Point(12, 238);
             checkBoxPERatio.Name = "checkBoxPERatio";
-            checkBoxPERatio.Size = new Size(73, 19);
+            checkBoxPERatio.Size = new Size(76, 19);
             checkBoxPERatio.TabIndex = 5;
-            checkBoxPERatio.Text = "P/E-ratio";
+            checkBoxPERatio.Text = "P/E-Ratio";
             checkBoxPERatio.UseVisualStyleBackColor = false;
             // 
             // checkBoxPBRatio
@@ -189,9 +195,9 @@
             checkBoxPBRatio.ForeColor = Color.Gold;
             checkBoxPBRatio.Location = new Point(12, 263);
             checkBoxPBRatio.Name = "checkBoxPBRatio";
-            checkBoxPBRatio.Size = new Size(74, 19);
+            checkBoxPBRatio.Size = new Size(77, 19);
             checkBoxPBRatio.TabIndex = 6;
-            checkBoxPBRatio.Text = "P/B-ratio";
+            checkBoxPBRatio.Text = "P/B-Ratio";
             checkBoxPBRatio.UseVisualStyleBackColor = false;
             // 
             // checkBoxDCF
@@ -222,10 +228,11 @@
             // 
             btnCalculate.BackColor = Color.Black;
             btnCalculate.FlatStyle = FlatStyle.Flat;
+            btnCalculate.Font = new Font("Segoe UI Semibold", 9.75F, FontStyle.Bold, GraphicsUnit.Point);
             btnCalculate.ForeColor = Color.Gold;
-            btnCalculate.Location = new Point(12, 288);
+            btnCalculate.Location = new Point(12, 291);
             btnCalculate.Name = "btnCalculate";
-            btnCalculate.Size = new Size(126, 30);
+            btnCalculate.Size = new Size(114, 27);
             btnCalculate.TabIndex = 9;
             btnCalculate.Text = "Calculate";
             btnCalculate.UseVisualStyleBackColor = false;
@@ -268,29 +275,8 @@
             dataGridView_analyze.RowHeadersDefaultCellStyle = dataGridViewCellStyle6;
             dataGridView_analyze.RowHeadersVisible = false;
             dataGridView_analyze.RowTemplate.Height = 25;
-            dataGridView_analyze.Size = new Size(200, 159);
+            dataGridView_analyze.Size = new Size(221, 159);
             dataGridView_analyze.TabIndex = 10;
-            // 
-            // dateTimePickerStart
-            // 
-            dateTimePickerStart.CalendarForeColor = Color.Gold;
-            dateTimePickerStart.CalendarMonthBackground = Color.Black;
-            dateTimePickerStart.CalendarTitleBackColor = Color.Black;
-            dateTimePickerStart.CalendarTitleForeColor = Color.Gold;
-            dateTimePickerStart.CalendarTrailingForeColor = Color.DarkGray;
-            dateTimePickerStart.CustomFormat = "\"\"";
-            dateTimePickerStart.Format = DateTimePickerFormat.Custom;
-            dateTimePickerStart.Location = new Point(132, 39);
-            dateTimePickerStart.Name = "dateTimePickerStart";
-            dateTimePickerStart.Size = new Size(101, 23);
-            dateTimePickerStart.TabIndex = 12;
-            // 
-            // dateTimePickerEnd
-            // 
-            dateTimePickerEnd.Location = new Point(239, 39);
-            dateTimePickerEnd.Name = "dateTimePickerEnd";
-            dateTimePickerEnd.Size = new Size(101, 23);
-            dateTimePickerEnd.TabIndex = 12;
             // 
             // CalculationColumn
             // 
@@ -302,12 +288,50 @@
             ResultColumn.HeaderText = "Result";
             ResultColumn.Name = "ResultColumn";
             // 
+            // dateTimePickerStart
+            // 
+            dateTimePickerStart.CalendarForeColor = Color.Gold;
+            dateTimePickerStart.CalendarMonthBackground = Color.Black;
+            dateTimePickerStart.CalendarTitleBackColor = Color.Black;
+            dateTimePickerStart.CalendarTitleForeColor = Color.Gold;
+            dateTimePickerStart.CalendarTrailingForeColor = Color.DarkGray;
+            dateTimePickerStart.CustomFormat = "";
+            dateTimePickerStart.Font = new Font("Segoe UI", 9F, FontStyle.Regular, GraphicsUnit.Point);
+            dateTimePickerStart.Format = DateTimePickerFormat.Custom;
+            dateTimePickerStart.Location = new Point(132, 47);
+            dateTimePickerStart.Name = "dateTimePickerStart";
+            dateTimePickerStart.Size = new Size(101, 23);
+            dateTimePickerStart.TabIndex = 12;
+            // 
+            // dateTimePickerEnd
+            // 
+            dateTimePickerEnd.Location = new Point(239, 47);
+            dateTimePickerEnd.Name = "dateTimePickerEnd";
+            dateTimePickerEnd.Size = new Size(101, 23);
+            dateTimePickerEnd.TabIndex = 12;
+            // 
+            // progressBar_search
+            // 
+            progressBar_search.Location = new Point(12, 31);
+            progressBar_search.Name = "progressBar_search";
+            progressBar_search.Size = new Size(328, 3);
+            progressBar_search.TabIndex = 13;
+            // 
+            // chartControlStocks
+            // 
+            chartControlStocks.Location = new Point(239, 238);
+            chartControlStocks.Name = "chartControlStocks";
+            chartControlStocks.Size = new Size(627, 330);
+            chartControlStocks.TabIndex = 14;
+            // 
             // Form1
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
             BackColor = Color.DimGray;
-            ClientSize = new Size(463, 495);
+            ClientSize = new Size(878, 580);
+            Controls.Add(chartControlStocks);
+            Controls.Add(progressBar_search);
             Controls.Add(dateTimePickerEnd);
             Controls.Add(dateTimePickerStart);
             Controls.Add(dataGridView_analyze);
@@ -326,6 +350,7 @@
             Load += Form1_Load;
             ((System.ComponentModel.ISupportInitialize)dataGridView_stocks).EndInit();
             ((System.ComponentModel.ISupportInitialize)dataGridView_analyze).EndInit();
+            ((System.ComponentModel.ISupportInitialize)chartControlStocks).EndInit();
             ResumeLayout(false);
             PerformLayout();
         }
@@ -353,5 +378,8 @@
         private DataGridViewTextBoxColumn VolumeColumn;
         private DataGridViewTextBoxColumn CalculationColumn;
         private DataGridViewTextBoxColumn ResultColumn;
+        private ProgressBar progressBar_search;
+        private System.ComponentModel.BackgroundWorker backgroundWorker_search;
+        private DevExpress.XtraCharts.ChartControl chartControlStocks;
     }
 }
