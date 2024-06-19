@@ -80,7 +80,6 @@ namespace DipScooper.Services
             rowDCF.CreateCells(dataGridView_analyze, "DCF Value", dcfValue);
             dataGridView_analyze.Rows.Add(rowDCF);
         }
-
         public async Task CalculateDDM(string symbol, DataGridView dataGridView_analyze, double growthRate, double discountRate)
         {
             double lastDividend = await apiClient.GetLastDividendAsync(symbol);
@@ -93,6 +92,55 @@ namespace DipScooper.Services
             var row = new DataGridViewRow();
             row.CreateCells(dataGridView_analyze, "Dividend Discount Model Value", ddmValue);
             dataGridView_analyze.Rows.Add(row);
+        }
+
+        public List<double> CalculateRSI(List<double> closePrices, int period = 14)
+        {
+            List<double> rsiValues = new List<double>();
+            if (closePrices.Count < period)
+                return rsiValues;
+
+            double gain = 0, loss = 0;
+
+            for (int i = 1; i < period; i++)
+            {
+                double change = closePrices[i] - closePrices[i - 1];
+                if (change > 0)
+                    gain += change;
+                else
+                    loss -= change;
+            }
+
+            gain /= period;
+            loss /= period;
+
+            double rs = gain / loss;
+            rsiValues.Add(100 - (100 / (1 + rs)));
+
+            for (int i = period; i < closePrices.Count; i++)
+            {
+                double change = closePrices[i] - closePrices[i - 1];
+                if (change > 0)
+                {
+                    gain = ((gain * (period - 1)) + change) / period;
+                    loss = (loss * (period - 1)) / period;
+                }
+                else
+                {
+                    gain = (gain * (period - 1)) / period;
+                    loss = ((loss * (period - 1)) - change) / period;
+                }
+
+                rs = gain / loss;
+                rsiValues.Add(100 - (100 / (1 + rs)));
+            }
+
+            for (int i = 0; i < period; i++)
+            {
+                rsiValues.Insert(0, 0);
+            }
+
+            return rsiValues;
         }
     }
 }

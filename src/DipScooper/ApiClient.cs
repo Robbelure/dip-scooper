@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
+using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -21,7 +22,7 @@ namespace DipScooper
             _client = new HttpClient();
         }
 
-        public async Task<string> GetTimeSeriesAsync(string symbol, string startDate, string endDate)
+        public async Task<string?> GetTimeSeriesAsync(string symbol, string startDate, string endDate)
         {
             var url = $"{_baseUrl}/v2/aggs/ticker/{symbol}/range/1/day/{startDate}/{endDate}?adjusted=true&apiKey={_apiKey}";
             try
@@ -122,7 +123,7 @@ namespace DipScooper
             }
         }
 
-        public async Task<List<double>> GetEPSAsync(string symbol, int limit = 1, string timeframe = "annual")
+        public async Task<List<double>?> GetEPSAsync(string symbol, int limit = 1, string timeframe = "annual")
         {
             var url = $"{_baseUrl}/vX/reference/financials?ticker={symbol}&limit={limit}&timeframe={timeframe}&apiKey={_apiKey}";
             try
