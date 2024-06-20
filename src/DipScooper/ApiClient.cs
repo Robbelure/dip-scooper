@@ -17,7 +17,7 @@ namespace DipScooper
     public class ApiClient
     {
         private readonly HttpClient _client;
-        private readonly string _apiKey = "tV1cMGsjpXHTjbTpyLHJ_45W2ucj_eSF";  // Ny Polygon API-nøkkel
+        private readonly string _apiKey = "tV1cMGsjpXHTjbTpyLHJ_45W2ucj_eSF";  // Polygon API-nøkkel
         private readonly string _baseUrl = "https://api.polygon.io";
 
         public ApiClient()
@@ -63,7 +63,6 @@ namespace DipScooper
                 response.EnsureSuccessStatusCode();
                 string responseBody = await response.Content.ReadAsStringAsync();
 
-                // Log JSON response for debugging
                 Debug.WriteLine("Market Price JSON response: " + responseBody);
 
                 var jsonDocument = JsonDocument.Parse(responseBody);
@@ -72,9 +71,8 @@ namespace DipScooper
                 if (results.GetArrayLength() > 0)
                 {
                     var latestData = results[0];
-                    double closePrice = latestData.GetProperty("c").GetDouble(); // Hent siste lukkepris (close)
+                    double closePrice = latestData.GetProperty("c").GetDouble();
 
-                    // Log close price for debugging
                     Debug.WriteLine($"Close Price for {symbol}: {closePrice}");
 
                     return closePrice;
@@ -110,7 +108,6 @@ namespace DipScooper
                 response.EnsureSuccessStatusCode();
                 string responseBody = await response.Content.ReadAsStringAsync();
 
-                // Log JSON response for debugging
                 Debug.WriteLine("Financials JSON response: " + responseBody);
 
                 var jsonDocument = JsonDocument.Parse(responseBody);
@@ -159,7 +156,6 @@ namespace DipScooper
                 response.EnsureSuccessStatusCode();
                 string responseBody = await response.Content.ReadAsStringAsync();
 
-                // Log JSON response for debugging
                 Debug.WriteLine("Financials JSON response: " + responseBody);
 
                 var jsonDocument = JsonDocument.Parse(responseBody);
@@ -243,8 +239,7 @@ namespace DipScooper
                     {
                         var cashFlowStatement = financial.GetProperty("financials").GetProperty("cash_flow_statement");
                         double netCashFlow = cashFlowStatement.GetProperty("net_cash_flow").GetProperty("value").GetDouble();
-                        //cashFlows.Add(netCashFlow);
-                        DateTime date = financial.GetProperty("start_date").GetDateTime();  // Eksempel på å hente datoen
+                        DateTime date = financial.GetProperty("start_date").GetDateTime();
                         cashFlows.Add(new CashFlowResponse { NetCashFlow = netCashFlow, Date = date });
                     }
                     return cashFlows;
@@ -280,7 +275,6 @@ namespace DipScooper
                 response.EnsureSuccessStatusCode();
                 string responseBody = await response.Content.ReadAsStringAsync();
 
-                // Log JSON response for debugging
                 Debug.WriteLine("Dividends JSON response: " + responseBody);
 
                 var jsonDocument = JsonDocument.Parse(responseBody);
@@ -289,7 +283,7 @@ namespace DipScooper
                 if (results.GetArrayLength() > 0)
                 {
                     var latestDividend = results[0];
-                    return latestDividend.GetProperty("amount").GetDouble(); // Returner siste utbyttebeløp
+                    return latestDividend.GetProperty("amount").GetDouble(); 
                 }
                 else
                 {

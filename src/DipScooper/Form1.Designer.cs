@@ -102,7 +102,7 @@
             dataGridView_stocks.RowHeadersDefaultCellStyle = dataGridViewCellStyle3;
             dataGridView_stocks.RowHeadersVisible = false;
             dataGridView_stocks.RowTemplate.Height = 25;
-            dataGridView_stocks.Size = new Size(439, 161);
+            dataGridView_stocks.Size = new Size(328, 161);
             dataGridView_stocks.TabIndex = 1;
             // 
             // DateColumn
@@ -159,7 +159,7 @@
             // 
             lblStatus.Font = new Font("Bahnschrift", 9.75F, FontStyle.Regular, GraphicsUnit.Point);
             lblStatus.ForeColor = Color.Lime;
-            lblStatus.Location = new Point(346, 20);
+            lblStatus.Location = new Point(12, 496);
             lblStatus.Name = "lblStatus";
             lblStatus.Size = new Size(105, 24);
             lblStatus.TabIndex = 3;
@@ -319,9 +319,9 @@
             // 
             // chartControlStocks
             // 
-            chartControlStocks.Location = new Point(239, 238);
+            chartControlStocks.Location = new Point(346, 7);
             chartControlStocks.Name = "chartControlStocks";
-            chartControlStocks.Size = new Size(627, 330);
+            chartControlStocks.Size = new Size(853, 543);
             chartControlStocks.TabIndex = 14;
             // 
             // Form1
@@ -329,7 +329,7 @@
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
             BackColor = Color.DimGray;
-            ClientSize = new Size(878, 580);
+            ClientSize = new Size(1211, 562);
             Controls.Add(chartControlStocks);
             Controls.Add(progressBar_search);
             Controls.Add(dateTimePickerEnd);

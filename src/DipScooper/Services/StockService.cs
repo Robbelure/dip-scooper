@@ -1,9 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Data;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.Data;
 using DipScooper.Calculators;
 using DipScooper.Models.ApiResponseModels;
 
@@ -137,7 +132,7 @@ namespace DipScooper.Services
 
             double gain = 0, loss = 0;
 
-            for (int i = 1; i < period; i++)
+            for (int i = 1; i <= period; i++)
             {
                 double change = closePrices[i] - closePrices[i - 1];
                 if (change > 0)
@@ -176,6 +171,24 @@ namespace DipScooper.Services
             }
 
             return rsiValues;
+        }
+
+        public List<double> CalculateSMA(List<double> prices, int period)
+        {
+            List<double> smaValues = new List<double>();
+            for (int i = 0; i < prices.Count; i++)
+            {
+                if (i >= period - 1)
+                {
+                    double sma = prices.Skip(i - period + 1).Take(period).Average();
+                    smaValues.Add(sma);
+                }
+                else
+                {
+                    smaValues.Add(0); 
+                }
+            }
+            return smaValues;
         }
     }
 }
