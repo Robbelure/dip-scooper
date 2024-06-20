@@ -43,6 +43,10 @@ namespace DipScooper
             InitializeChartControl();
         }
 
+        /// <summary>
+        /// Håndterer klikkhendelsen for beregningsknappen.
+        /// Utfører finansielle beregninger basert på brukerens valg.
+        /// </summary>
         private async void btnCalculate_Click(object sender, EventArgs e)
         {
             string symbol = textBoxSearch.Text.Trim();
@@ -57,19 +61,6 @@ namespace DipScooper
 
             dataGridView_analyze.Rows.Clear();
 
-            /*
-            DataTable dataTable;
-            if (dataGridView_analyze.DataSource == null)
-            {
-                dataTable = new DataTable();
-                dataTable.Columns.Add("Calculation", typeof(string));
-                dataTable.Columns.Add("Result", typeof(double));
-            }
-            else
-            {
-                dataTable = (DataTable)dataGridView_analyze.DataSource;
-            }
-            */
             try
             {
                 if (checkBoxPERatio.Checked)
@@ -99,6 +90,10 @@ namespace DipScooper
             }
         }
 
+        /// <summary>
+        /// Håndterer klikkhendelsen for søkeknappen.
+        /// Starter en asynkron søkingsprosess for å hente aksjedata.
+        /// </summary>
         private void BtnSearch_Click(object sender, EventArgs e)
         {
             string symbol = textBoxSearch.Text.Trim().ToUpper();
@@ -118,6 +113,11 @@ namespace DipScooper
             }
         }
 
+        /// <summary>
+        /// Prosesserer JSON-data mottatt fra APIet og konverterer det til rader som kan vises i dataGridView_stocks.
+        /// </summary>
+        /// <param name="jsonData">JSON-data mottatt fra APIet.</param>
+        /// <returns>Liste over DataGridViewRow objekter.</returns>
         private List<DataGridViewRow> ProcessJsonData(string jsonData)
         {
             if (string.IsNullOrEmpty(jsonData))
@@ -149,6 +149,7 @@ namespace DipScooper
             return rows;
         }
 
+        // Initialiserer ChartControl komponenten for å vise aksjedata
         private void InitializeChartControl()
         {
             // Initialiser ChartControl
@@ -247,6 +248,10 @@ namespace DipScooper
             chartControlStocks.Refresh();
         }
 
+        /// <summary>
+        /// BackgroundWorker DoWork event handler.
+        /// Henter aksjedata fra APIet.
+        /// </summary>
         private void backgroundWorker_search_DoWork(object sender, DoWorkEventArgs e)
         {
             // Hent inn verdier fra UI-tråden
@@ -288,6 +293,10 @@ namespace DipScooper
             }
         }
 
+        /// <summary>
+        /// BackgroundWorker ProgressChanged event handler.
+        /// Oppdaterer progress bar og legger til rader i dataGridView_stocks.
+        /// </summary>
         private void backgroundWorker_search_ProgressChanged(object sender, ProgressChangedEventArgs e)
         {
             progressBar_search.Value = e.ProgressPercentage;
@@ -297,6 +306,10 @@ namespace DipScooper
             }
         }
 
+        /// <summary>
+        /// BackgroundWorker RunWorkerCompleted event handler.
+        /// Håndterer ferdigstillelse av søkingsprosessen.
+        /// </summary>
         private void backgroundWorker_search_RunWorkerCompleted(object sender, RunWorkerCompletedEventArgs e)
         {
             if (e.Error != null || e.Result is Exception)
@@ -373,6 +386,7 @@ namespace DipScooper
             };
         }
 
+        // Initialiserer kolonnene for dataGridView_stocks.
         private void InitializeDataGridViewStocksColumns()
         {
             dataGridView_stocks.Columns.Clear();
@@ -384,6 +398,7 @@ namespace DipScooper
             dataGridView_stocks.Columns.Add("Volume", "Volume");
         }
 
+        // Initialiserer kolonnene for dataGridView_analyze.
         private void InitializeDataGridViewAnalyzeColumns()
         {
             dataGridView_analyze.Columns.Clear();

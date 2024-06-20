@@ -9,6 +9,9 @@ using DipScooper.Models.ApiResponseModels;
 
 namespace DipScooper.Services
 {
+    /// <summary>
+    /// Klasse som håndterer beregninger og logikk knyttet til aksjeanalyse.
+    /// </summary>
     public class StockService
     {
         private ApiClient apiClient;
@@ -26,6 +29,11 @@ namespace DipScooper.Services
             ddmCalculator = new DDMCalculator();
         }
 
+        /// <summary>
+        /// Utfører P/E-ratio beregning og legger resultatene til i DataGridView.
+        /// </summary>
+        /// <param name="symbol">Aksjesymbol.</param>
+        /// <param name="dataGridView_analyze">DataGridView for å vise analyse resultatene.</param>
         public async Task CalculatePERatio(string symbol, DataGridView dataGridView_analyze)
         {
             double marketPrice = await apiClient.GetLatestMarketPriceAsync(symbol);
@@ -52,6 +60,12 @@ namespace DipScooper.Services
             rowTrailingPERatio.CreateCells(dataGridView_analyze, "Trailing P/E Ratio", trailingPERatio);
             dataGridView_analyze.Rows.Add(rowTrailingPERatio);
         }
+
+        /// <summary>
+        /// Utfører P/B-ratio beregning og legger resultatene til i DataGridView.
+        /// </summary>
+        /// <param name="symbol">Aksjesymbol.</param>
+        /// <param name="dataGridView_analyze">DataGridView for å vise analyse resultatene.</param>
         public async Task CalculatePBRatio(string symbol, DataGridView dataGridView_analyze)
         {
             double marketPrice = await apiClient.GetLatestMarketPriceAsync(symbol);
@@ -67,6 +81,13 @@ namespace DipScooper.Services
             rowPBRatio.CreateCells(dataGridView_analyze, "P/B Ratio", pbRatio);
             dataGridView_analyze.Rows.Add(rowPBRatio);
         }
+
+        /// <summary>
+        /// Utfører DCF-beregning og legger resultatene til i DataGridView.
+        /// </summary>
+        /// <param name="symbol">Aksjesymbol.</param>
+        /// <param name="dataGridView_analyze">DataGridView for å vise analyse resultatene.</param>
+        /// <param name="discountRate">Diskonteringsrente for DCF-beregningen.</param>
         public async Task CalculateDCF(string symbol, DataGridView dataGridView_analyze, double discountRate)
         {
             List<CashFlowResponse> cashFlows = await apiClient.GetCashFlowsAsync(symbol);
@@ -80,6 +101,14 @@ namespace DipScooper.Services
             rowDCF.CreateCells(dataGridView_analyze, "DCF Value", dcfValue);
             dataGridView_analyze.Rows.Add(rowDCF);
         }
+
+        /// <summary>
+        /// Utfører DDM-beregning og legger resultatene til i DataGridView.
+        /// </summary>
+        /// <param name="symbol">Aksjesymbol.</param>
+        /// <param name="dataGridView_analyze">DataGridView for å vise analyse resultatene.</param>
+        /// <param name="growthRate">Vekstrate for DDM-beregningen.</param>
+        /// <param name="discountRate">Diskonteringsrente for DDM-beregningen.</param>
         public async Task CalculateDDM(string symbol, DataGridView dataGridView_analyze, double growthRate, double discountRate)
         {
             double lastDividend = await apiClient.GetLastDividendAsync(symbol);
@@ -94,6 +123,12 @@ namespace DipScooper.Services
             dataGridView_analyze.Rows.Add(row);
         }
 
+        /// <summary>
+        /// Beregner Relative Strength Index (RSI) for en liste av lukkepriser.
+        /// </summary>
+        /// <param name="closePrices">Liste av lukkepriser.</param>
+        /// <param name="period">Perioden for RSI-beregningen (standard er 14).</param>
+        /// <returns>Liste av RSI-verdier.</returns>
         public List<double> CalculateRSI(List<double> closePrices, int period = 14)
         {
             List<double> rsiValues = new List<double>();
