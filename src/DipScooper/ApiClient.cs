@@ -11,6 +11,9 @@ using DipScooper.Models.ApiResponseModels;
 
 namespace DipScooper
 {
+    /// <summary>
+    /// Klasse for å håndtere API-kall til Polygon API for å hente finansielle data.
+    /// </summary>
     public class ApiClient
     {
         private readonly HttpClient _client;
@@ -22,6 +25,13 @@ namespace DipScooper
             _client = new HttpClient();
         }
 
+        /// <summary>
+        /// Henter tidsserie data for en gitt aksje innenfor et spesifisert datointervall.
+        /// </summary>
+        /// <param name="symbol">Aksjesymbol.</param>
+        /// <param name="startDate">Startdato for tidsintervallet.</param>
+        /// <param name="endDate">Sluttdato for tidsintervallet.</param>
+        /// <returns>JSON data som en streng.</returns>
         public async Task<string?> GetTimeSeriesAsync(string symbol, string startDate, string endDate)
         {
             var url = $"{_baseUrl}/v2/aggs/ticker/{symbol}/range/1/day/{startDate}/{endDate}?adjusted=true&apiKey={_apiKey}";
@@ -39,6 +49,11 @@ namespace DipScooper
             }
         }
 
+        /// <summary>
+        /// Henter den siste markedsprisen for en gitt aksje.
+        /// </summary>
+        /// <param name="symbol">Aksjesymbol.</param>
+        /// <returns>Den siste markedsprisen.</returns>
         public async Task<double> GetLatestMarketPriceAsync(string symbol)
         {
             var url = $"{_baseUrl}/v2/aggs/ticker/{symbol}/prev?apiKey={_apiKey}";
@@ -81,6 +96,11 @@ namespace DipScooper
             }
         }
 
+        /// <summary>
+        /// Henter bokført verdi per aksje for en gitt aksje.
+        /// </summary>
+        /// <param name="symbol">Aksjesymbol.</param>
+        /// <returns>Bokført verdi per aksje.</returns>
         public async Task<double> GetBookValuePerShareAsync(string symbol)
         {
             var url = $"{_baseUrl}/vX/reference/financials?ticker={symbol}&limit=1&timeframe=annual&apiKey={_apiKey}";
@@ -123,6 +143,13 @@ namespace DipScooper
             }
         }
 
+        /// <summary>
+        /// Henter fortjeneste per aksje (EPS) for en gitt aksje.
+        /// </summary>
+        /// <param name="symbol">Aksjesymbol.</param>
+        /// <param name="limit">Antall perioder å hente data for.</param>
+        /// <param name="timeframe">Tidsramme (annual, quarterly, etc.).</param>
+        /// <returns>Liste over EPS verdier.</returns>
         public async Task<List<double>?> GetEPSAsync(string symbol, int limit = 1, string timeframe = "annual")
         {
             var url = $"{_baseUrl}/vX/reference/financials?ticker={symbol}&limit={limit}&timeframe={timeframe}&apiKey={_apiKey}";
@@ -168,17 +195,32 @@ namespace DipScooper
             }
         }
 
+        /// <summary>
+        /// Henter den siste fortjenesten per aksje (EPS) for en gitt aksje.
+        /// </summary>
+        /// <param name="symbol">Aksjesymbol.</param>
+        /// <returns>Den siste EPS verdien.</returns>
         public async Task<double> GetEarningsPerShareAsync(string symbol)
         {
             var epsValues = await GetEPSAsync(symbol, 1, "annual");
             return epsValues != null && epsValues.Count > 0 ? epsValues[0] : 0.0;
         }
 
+        /// <summary>
+        /// Henter fortjeneste per aksje (EPS) for de siste fire kvartalene.
+        /// </summary>
+        /// <param name="symbol">Aksjesymbol.</param>
+        /// <returns>Liste over EPS verdier for de siste fire kvartalene.</returns>
         public async Task<List<double>> GetTrailingEPSAsync(string symbol)
         {
             return await GetEPSAsync(symbol, 4, "quarterly");
         }
 
+        /// <summary>
+        /// Henter kontantstrøm data for en gitt aksje.
+        /// </summary>
+        /// <param name="symbol">Aksjesymbol.</param>
+        /// <returns>Liste over kontantstrømresponsobjekter.</returns>
         public async Task<List<CashFlowResponse>> GetCashFlowsAsync(string symbol)
         {
             var url = $"{_baseUrl}/vX/reference/financials?ticker={symbol}&limit=5&timeframe=annual&apiKey={_apiKey}";
@@ -224,6 +266,11 @@ namespace DipScooper
             }
         }
 
+        /// <summary>
+        /// Henter det siste utbyttet for en gitt aksje.
+        /// </summary>
+        /// <param name="symbol">Aksjesymbol.</param>
+        /// <returns>Det siste utbyttebeløpet.</returns>
         public async Task<double> GetLastDividendAsync(string symbol)
         {
             var url = $"{_baseUrl}/v2/reference/dividends/{symbol}?apiKey={_apiKey}";
