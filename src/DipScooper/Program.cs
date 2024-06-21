@@ -1,17 +1,27 @@
+using System.IO;
+using Microsoft.Extensions.Configuration;
+
 namespace DipScooper
 {
     internal static class Program
     {
-        /// <summary>
-        ///  The main entry point for the application.
-        /// </summary>
-        [STAThread]
+        public static IConfiguration Configuration { get; private set; }
+
         static void Main()
         {
-            // To customize application configuration such as set high DPI settings or default font,
-            // see https://aka.ms/applicationconfiguration.
+            InitializeConfiguration();
             ApplicationConfiguration.Initialize();
             Application.Run(new Form1());
+        }
+
+        static void InitializeConfiguration()
+        {
+            // Bygg konfigurasjonen fra appsettings.json
+            var builder = new ConfigurationBuilder()
+                .SetBasePath(AppDomain.CurrentDomain.BaseDirectory)
+                .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true);
+
+            Configuration = builder.Build();
         }
     }
 }
