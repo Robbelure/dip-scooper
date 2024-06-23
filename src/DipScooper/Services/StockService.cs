@@ -165,6 +165,7 @@ namespace DipScooper.Services
                 rsiValues.Add(100 - (100 / (1 + rs)));
             }
 
+            // Fyll med nuller for de første 'period' dagene
             for (int i = 0; i < period; i++)
             {
                 rsiValues.Insert(0, 0);
@@ -185,7 +186,7 @@ namespace DipScooper.Services
                 }
                 else
                 {
-                    smaValues.Add(0); 
+                    smaValues.Add(double.NaN);  // Sett til NaN for å markere at det ikke er nok data
                 }
             }
             return smaValues;

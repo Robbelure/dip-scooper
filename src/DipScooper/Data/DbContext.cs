@@ -21,5 +21,10 @@ namespace DipScooper.Data
         public IMongoCollection<Stock> Stocks => _database.GetCollection<Stock>("Stocks");
         public IMongoCollection<HistoricalData> HistoricalData => _database.GetCollection<HistoricalData>("HistoricalData");
         public IMongoCollection<Indicator> Indicators => _database.GetCollection<Indicator>("Indicators");
+
+        public async Task SaveHistoricalData(IEnumerable<HistoricalData> data)
+        {
+            await HistoricalData.InsertManyAsync(data);
+        }
     }
 }

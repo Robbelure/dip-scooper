@@ -2,6 +2,9 @@ using System.Text.Json;
 using System.Diagnostics;
 using DipScooper.Services;
 using DevExpress.XtraCharts;
+using DipScooper.Data;
+using DipScooper.Models;
+using MongoDB.Driver;
 
 namespace DipScooper
 {
@@ -9,12 +12,14 @@ namespace DipScooper
     {
         private ApiClient apiClient;
         private StockService stockService;
+        private DbContext dbContext;
 
         public Form1()
         {
             InitializeComponent();
             apiClient = new ApiClient();
             stockService = new StockService();
+            dbContext = new DbContext();
 
             InitializeDateTimePicker(dateTimePickerStart);
             InitializeDateTimePicker(dateTimePickerEnd);
@@ -90,47 +95,83 @@ namespace DipScooper
                 MessageBox.Show("Please enter a valid stock symbol.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
-            if (true)
+
+            progressBar_search.Visible = true;
+            progressBar_search.Value = 0;
+            lblStatus.Text = "Searching...";
+            lblStatus.ForeColor = System.Drawing.Color.Blue;
+            dataGridView_stocks.Rows.Clear();
+
+            var stock = await dbContext.Stocks.Find(s => s.Symbol == symbol).FirstOrDefaultAsync();
+            if (stock == null)
             {
-                progressBar_search.Value = 0;
-                progressBar_search.Visible = true;
-                lblStatus.Text = "Searching...";
-                lblStatus.ForeColor = System.Drawing.Color.Blue;
-                dataGridView_stocks.Rows.Clear(); 
-                await RunBackgroundSearchAsync(symbol); 
+                stock = new Stock { Symbol = symbol, Name = "Unknown", Market = "Unknown" };
+                await dbContext.Stocks.InsertOneAsync(stock);
+            }
+
+            DateTime startDate = dateTimePickerStart.Value.Date;
+            DateTime endDate = dateTimePickerEnd.Value.Date;
+
+            try
+            {
+                var historicalDataList = await LoadDataToGrid(stock.Id, startDate, endDate);
+                if (historicalDataList.Any())
+                {
+                    UpdateChartWithData(historicalDataList);
+                    chartControlStocks.Refresh();  
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Failed to load data: " + ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                Debug.WriteLine("Exception: " + ex.Message + "\nStackTrace: " + ex.StackTrace);
+            }
+            finally
+            {
+                progressBar_search.Visible = false;
+                lblStatus.Text = "Ready";
+                lblStatus.ForeColor = System.Drawing.Color.Black;
             }
         }
 
         /// <summary>
         /// Kjører bakgrunnssøk asynkront for å hente aksjedata.
         /// </summary>
-        private async Task RunBackgroundSearchAsync(string symbol)
+        private async Task RunBackgroundSearchAsync(string symbol, string stockId, DateTime startDate, DateTime endDate)
         {
-            string startDate = dateTimePickerStart.Value.ToString("yyyy-MM-dd");
-            string endDate = dateTimePickerEnd.Value.ToString("yyyy-MM-dd");
-
             try
             {
-                string jsonData = await apiClient.GetTimeSeriesAsync(symbol, startDate, endDate);
+                string jsonData = await apiClient.GetTimeSeriesAsync(symbol, startDate.ToString("yyyy-MM-dd"), endDate.ToString("yyyy-MM-dd"));
+                Debug.WriteLine(jsonData);
                 if (string.IsNullOrEmpty(jsonData))
                 {
                     throw new Exception("No data retrieved from the API.");
                 }
 
-                // Prosessérer dataen
-                var rows = ProcessJsonData(jsonData);
+                var historicalData = ProcessJsonData(jsonData, stockId);
 
-                // Oppdater UI 
+                var existingData = await dbContext.HistoricalData
+                    .Find(hd => hd.StockId == stockId && hd.Date >= startDate && hd.Date <= endDate)
+                    .ToListAsync();
+
+                var newData = historicalData
+                    .Where(newData => !existingData.Any(existing => existing.Date == newData.Date))
+                    .ToList();
+
+                if (newData.Any())
+                {
+                    await dbContext.HistoricalData.InsertManyAsync(newData);
+                }
+
                 Invoke(new Action(() =>
                 {
-                    foreach (var row in rows)
+                    foreach (var data in newData)
                     {
-                        dataGridView_stocks.Rows.Add(row);
+                        dataGridView_stocks.Rows.Add(CreateRowFromData(data));
                     }
+                    UpdateChartWithData(existingData.Concat(newData).ToList());
                     lblStatus.Text = "Data loaded successfully.";
                     lblStatus.ForeColor = System.Drawing.Color.Green;
-
-                    UpdateChartWithData();
                 }));
             }
             catch (Exception ex)
@@ -150,40 +191,128 @@ namespace DipScooper
             }
         }
 
+        private List<(DateTime, DateTime)> GetMissingDateRanges(DateTime startDate, DateTime endDate, List<DateTime> existingDates)
+        {
+            List<(DateTime, DateTime)> missingRanges = new List<(DateTime, DateTime)>();
+
+            DateTime current = startDate;
+            while (current <= endDate)
+            {
+                if (!existingDates.Contains(current))
+                {
+                    DateTime rangeStart = current;
+                    while (current <= endDate && !existingDates.Contains(current))
+                    {
+                        current = current.AddDays(1);
+                    }
+                    DateTime rangeEnd = current.AddDays(-1);
+                    missingRanges.Add((rangeStart, rangeEnd));
+                }
+                current = current.AddDays(1);
+            }
+
+            return missingRanges;
+        }
+
         /// <summary>
         /// Prosesserer JSON-data mottatt fra APIet og konverterer det til rader som kan vises i dataGridView_stocks.
         /// </summary>
         /// <param name="jsonData">JSON-data mottatt fra APIet.</param>
         /// <returns>Liste over DataGridViewRow objekter.</returns>
-        private List<DataGridViewRow> ProcessJsonData(string jsonData)
+        private List<HistoricalData> ProcessJsonData(string jsonData, string stockId)
         {
             if (string.IsNullOrEmpty(jsonData))
-            {
                 throw new ArgumentException("JSON data is null or empty.");
-            }
 
             var jsonDocument = JsonDocument.Parse(jsonData);
             var root = jsonDocument.RootElement.GetProperty("results");
-            List<DataGridViewRow> rows = new List<DataGridViewRow>();
+            List<HistoricalData> historicalDataList = new List<HistoricalData>();
 
             foreach (var result in root.EnumerateArray())
             {
-                var row = new DataGridViewRow();
-                row.CreateCells(dataGridView_stocks);
+                try
+                {
+                    if (result.TryGetProperty("t", out var tProperty) &&
+                        result.TryGetProperty("o", out var oProperty) &&
+                        result.TryGetProperty("h", out var hProperty) &&
+                        result.TryGetProperty("l", out var lProperty) &&
+                        result.TryGetProperty("c", out var cProperty) &&
+                        result.TryGetProperty("v", out var vProperty))
+                    {
+                        HistoricalData historicalData = new HistoricalData
+                        {
+                            StockId = stockId,
+                            Date = DateTimeOffset.FromUnixTimeMilliseconds(tProperty.GetInt64()).DateTime,
+                            Open = oProperty.GetDouble(),
+                            High = hProperty.GetDouble(),
+                            Low = lProperty.GetDouble(),
+                            Close = cProperty.GetDouble(),
+                            Volume = Convert.ToInt64(vProperty.GetDouble())
+                        };
 
-                long timestamp = result.GetProperty("t").GetInt64();
-                DateTime date = DateTimeOffset.FromUnixTimeMilliseconds(timestamp).DateTime;
-                row.Cells[0].Value = date.ToString("yyyy-MM-dd");
-                row.Cells[1].Value = result.GetProperty("o").GetDouble();
-                row.Cells[2].Value = result.GetProperty("h").GetDouble();
-                row.Cells[3].Value = result.GetProperty("l").GetDouble();
-                row.Cells[4].Value = result.GetProperty("c").GetDouble();
-                row.Cells[5].Value = result.GetProperty("v").GetDouble();
-
-                rows.Add(row);
+                        historicalDataList.Add(historicalData);
+                        Debug.WriteLine($"Processed data for date: {historicalData.Date}");
+                    }
+                    else
+                    {
+                        Debug.WriteLine("Missing one or more properties in the result element.");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"Error processing result: {result}");
+                    Debug.WriteLine($"Exception: {ex.Message}");
+                    Debug.WriteLine($"StackTrace: {ex.StackTrace}");
+                    throw;
+                }
             }
 
-            return rows;
+            Debug.WriteLine("Finished processing JSON data.");
+            return historicalDataList;
+        }
+
+        private async Task<List<HistoricalData>> LoadDataToGrid(string stockId, DateTime startDate, DateTime endDate)
+        {
+            var historicalDataList = await dbContext.HistoricalData
+                .Find(hd => hd.StockId == stockId && hd.Date >= startDate && hd.Date <= endDate)
+                .ToListAsync();
+
+            var existingDates = historicalDataList.Select(hd => hd.Date).ToList();
+
+            if (historicalDataList.Count > 0)
+            {
+                foreach (var data in historicalDataList)
+                {
+                    if (!dataGridView_stocks.Rows.Cast<DataGridViewRow>().Any(r => r.Cells["Date"].Value.ToString() == data.Date.ToString("yyyy-MM-dd")))
+                    {
+                        dataGridView_stocks.Rows.Add(CreateRowFromData(data));
+                    }
+                }
+            }
+
+            var missingRanges = GetMissingDateRanges(startDate, endDate, existingDates);
+
+            foreach (var (rangeStart, rangeEnd) in missingRanges)
+            {
+                await RunBackgroundSearchAsync(textBoxSearch.Text.Trim().ToUpper(), stockId, rangeStart, rangeEnd);
+            }
+
+            return historicalDataList;
+        }
+
+        private DataGridViewRow CreateRowFromData(HistoricalData data)
+        {
+            var row = new DataGridViewRow();
+            row.CreateCells(dataGridView_stocks);
+
+            row.Cells[0].Value = data.Date.ToString("yyyy-MM-dd");
+            row.Cells[1].Value = data.Open;
+            row.Cells[2].Value = data.High;
+            row.Cells[3].Value = data.Low;
+            row.Cells[4].Value = data.Close;
+            row.Cells[5].Value = data.Volume;
+
+            return row;
         }
 
         private void InitializeChartControl()
@@ -252,26 +381,26 @@ namespace DipScooper
             }
         }
 
-        private void UpdateChartWithData()
+        private void UpdateChartWithData(List<HistoricalData> historicalDataList)
         {
             if (dataGridView_stocks.Rows.Count == 0)
                 return;
 
             Series volumeSeries = chartControlStocks.Series["Volume"];
             Series rsiSeries = chartControlStocks.Series["RSI"];
-            Series candlestickSeries = chartControlStocks.Series["Price"]; 
-            
-            Series sma50Series = chartControlStocks.Series["sma50"];
+            Series candlestickSeries = chartControlStocks.Series["Price"];
+
+            Series sma50Series = chartControlStocks.Series["SMA50"];
             if (sma50Series == null)
             {
-                sma50Series = new Series("sma50", ViewType.Line);
+                sma50Series = new Series("SMA50", ViewType.Line);
                 chartControlStocks.Series.Add(sma50Series);
             }
 
-            Series sma200Series = chartControlStocks.Series["sma200"];
+            Series sma200Series = chartControlStocks.Series["SMA200"];
             if (sma200Series == null)
             {
-                sma200Series = new Series("sma200", ViewType.Line);
+                sma200Series = new Series("SMA200", ViewType.Line);
                 chartControlStocks.Series.Add(sma200Series);
             }
 
@@ -284,16 +413,16 @@ namespace DipScooper
             List<double> closePrices = new List<double>();
             List<DateTime> dates = new List<DateTime>();
 
-            foreach (DataGridViewRow row in dataGridView_stocks.Rows)
+            foreach (var data in historicalDataList)
             {
-                if (row.Cells["Date"].Value != null)
+                if (data != null)
                 {
-                    DateTime date = DateTime.Parse(row.Cells["Date"].Value.ToString());
-                    double openPrice = Convert.ToDouble(row.Cells["Open"].Value);
-                    double highPrice = Convert.ToDouble(row.Cells["High"].Value);
-                    double lowPrice = Convert.ToDouble(row.Cells["Low"].Value);
-                    double closePrice = Convert.ToDouble(row.Cells["Close"].Value);
-                    double volume = Convert.ToDouble(row.Cells["Volume"].Value);
+                    DateTime date = data.Date;
+                    double openPrice = data.Open;
+                    double highPrice = data.High;
+                    double lowPrice = data.Low;
+                    double closePrice = data.Close;
+                    double volume = data.Volume;
 
                     dates.Add(date);
                     closePrices.Add(closePrice);
