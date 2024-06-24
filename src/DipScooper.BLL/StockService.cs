@@ -1,9 +1,13 @@
 ﻿using System.Data;
+using System.Diagnostics;
+using System.Text.Json;
 using DipScooper.BLL.Calculators;
+using DipScooper.Dal.Data;
 using DipScooper.DAL.API;
 using DipScooper.Models;
 using DipScooper.Models.APIModels;
-
+using DipScooper.Models.Models;
+using MongoDB.Driver;
 
 namespace DipScooper.BLL
 {
@@ -11,6 +15,7 @@ namespace DipScooper.BLL
     public class StockService
     {
         private ApiClient apiClient;
+        private DbContext dbContext;
         private DCFCalculator dcfCalculator;
         private PERatioCalculator peRatioCalculator;
         private PBRatioCalculator pbRatioCalculator;
@@ -19,11 +24,156 @@ namespace DipScooper.BLL
         public StockService()
         {
             apiClient = new ApiClient();
+            dbContext = new DbContext();
             dcfCalculator = new DCFCalculator();
             peRatioCalculator = new PERatioCalculator();
             pbRatioCalculator = new PBRatioCalculator();
             ddmCalculator = new DDMCalculator();
         }
+
+        // sjekker og returnerer aksjeinformasjonen fra databasen
+        public async Task<Stock> GetOrCreateStockAsync(string symbol)
+        {
+            var stock = await dbContext.Stocks.Find(s => s.Symbol == symbol).FirstOrDefaultAsync();
+            if (stock == null)
+            {
+                stock = new Stock { Symbol = symbol, Name = "Unknown", Market = "Unknown" };
+                await dbContext.Stocks.InsertOneAsync(stock);
+            }
+            return stock;
+        }
+
+        // laster historiske data fra databasen, og henter manglende data fra APIet hvis nødvendig
+        public async Task<List<HistoricalData>> LoadHistoricalDataAsync(string stockId, string symbol, DateTime startDate, DateTime endDate)
+        {
+            var historicalDataList = await dbContext.HistoricalData
+                .Find(hd => hd.StockId == stockId && hd.Date >= startDate && hd.Date <= endDate)
+                .ToListAsync();
+
+            var existingDates = historicalDataList.Select(hd => hd.Date).ToList();
+
+            var missingRanges = GetMissingDateRanges(startDate, endDate, existingDates);
+
+            foreach (var (rangeStart, rangeEnd) in missingRanges)
+            {
+                await RunBackgroundSearchAsync(stockId, symbol, rangeStart, rangeEnd);
+            }
+
+            return historicalDataList;
+        }
+
+        // henter data fra APIet og setter det inn i databasen
+        public async Task<List<HistoricalData>> RunBackgroundSearchAsync(string stockId, string symbol, DateTime startDate, DateTime endDate)
+        {
+            string jsonData = await apiClient.GetTimeSeriesAsync(symbol, startDate.ToString("yyyy-MM-dd"), endDate.ToString("yyyy-MM-dd"));
+            if (string.IsNullOrEmpty(jsonData))
+            {
+                throw new Exception("No data retrieved from the API.");
+            }
+
+            var historicalData = ProcessJsonData(jsonData, stockId);
+
+            foreach (var data in historicalData)
+            {
+                var filter = Builders<HistoricalData>.Filter.And(
+                    Builders<HistoricalData>.Filter.Eq(hd => hd.StockId, stockId),
+                    Builders<HistoricalData>.Filter.Eq(hd => hd.Date, data.Date)
+                );
+
+                var update = Builders<HistoricalData>.Update
+                    .Set(hd => hd.Open, data.Open)
+                    .Set(hd => hd.High, data.High)
+                    .Set(hd => hd.Low, data.Low)
+                    .Set(hd => hd.Close, data.Close)
+                    .Set(hd => hd.Volume, data.Volume);
+
+                var updateOptions = new UpdateOptions { IsUpsert = true };
+                await dbContext.HistoricalData.UpdateOneAsync(filter, update, updateOptions);
+            }
+
+            var existingData = await dbContext.HistoricalData
+                .Find(hd => hd.StockId == stockId && hd.Date >= startDate && hd.Date <= endDate)
+                .ToListAsync();
+
+            return existingData;
+        }
+
+        private List<(DateTime, DateTime)> GetMissingDateRanges(DateTime startDate, DateTime endDate, List<DateTime> existingDates)
+        {
+            List<(DateTime, DateTime)> missingRanges = new List<(DateTime, DateTime)>();
+
+            DateTime current = startDate;
+            while (current <= endDate)
+            {
+                if (!existingDates.Contains(current))
+                {
+                    DateTime rangeStart = current;
+                    while (current <= endDate && !existingDates.Contains(current))
+                    {
+                        current = current.AddDays(1);
+                    }
+                    DateTime rangeEnd = current.AddDays(-1);
+                    missingRanges.Add((rangeStart, rangeEnd));
+                }
+                current = current.AddDays(1);
+            }
+
+            return missingRanges;
+        }
+
+        public List<HistoricalData> ProcessJsonData(string jsonData, string stockId)
+        {
+            if (string.IsNullOrEmpty(jsonData))
+                throw new ArgumentException("JSON data is null or empty.");
+
+            var jsonDocument = JsonDocument.Parse(jsonData);
+            var root = jsonDocument.RootElement.GetProperty("results");
+            List<HistoricalData> historicalDataList = new List<HistoricalData>();
+
+            foreach (var result in root.EnumerateArray())
+            {
+                try
+                {
+                    if (result.TryGetProperty("t", out var tProperty) &&
+                        result.TryGetProperty("o", out var oProperty) &&
+                        result.TryGetProperty("h", out var hProperty) &&
+                        result.TryGetProperty("l", out var lProperty) &&
+                        result.TryGetProperty("c", out var cProperty) &&
+                        result.TryGetProperty("v", out var vProperty))
+                    {
+                        HistoricalData historicalData = new HistoricalData
+                        {
+                            StockId = stockId,
+                            Date = DateTimeOffset.FromUnixTimeMilliseconds(tProperty.GetInt64()).DateTime,
+                            Open = oProperty.GetDouble(),
+                            High = hProperty.GetDouble(),
+                            Low = lProperty.GetDouble(),
+                            Close = cProperty.GetDouble(),
+                            Volume = Convert.ToInt64(vProperty.GetDouble())
+                        };
+
+                        historicalDataList.Add(historicalData);
+                        Debug.WriteLine($"Processed data for date: {historicalData.Date}");
+                    }
+                    else
+                    {
+                        Debug.WriteLine("Missing one or more properties in the result element.");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"Error processing result: {result}");
+                    Debug.WriteLine($"Exception: {ex.Message}");
+                    Debug.WriteLine($"StackTrace: {ex.StackTrace}");
+                    throw;
+                }
+            }
+
+            Debug.WriteLine("Finished processing JSON data.");
+            return historicalDataList;
+        }
+
+
 
         public async Task<List<CalculationResult>> CalculatePERatio(string symbol)
         {
