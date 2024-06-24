@@ -1,11 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace DipScooper.Models
+﻿namespace DipScooper.Models
 {
+    // the result of a financial calculation (StockService)
     public class CalculationResult
     {
         public string Name { get; set; }

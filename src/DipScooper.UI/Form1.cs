@@ -1,7 +1,6 @@
 using System.Text.Json;
 using System.Diagnostics;
 using DevExpress.XtraCharts;
-
 using MongoDB.Driver;
 using System.Windows.Forms;
 using DipScooper.Models.Models;
@@ -108,6 +107,7 @@ namespace DipScooper.UI
             lblStatus.ForeColor = System.Drawing.Color.Blue;
             dataGridView_stocks.Rows.Clear();
 
+            // searching db for stock
             var stock = await dbContext.Stocks.Find(s => s.Symbol == symbol).FirstOrDefaultAsync();
             if (stock == null)
             {
@@ -246,21 +246,6 @@ namespace DipScooper.UI
             }
 
             chartControlStocks.Refresh();
-        }
-
-        private void AddResultsToSeries(List<CalculationResult> results, string seriesName)
-        {
-            var series = chartControlStocks.Series.FirstOrDefault(s => s.Name == seriesName) as Series;
-            if (series == null)
-            {
-                series = new Series(seriesName, ViewType.Line);
-                chartControlStocks.Series.Add(series);
-            }
-
-            foreach (var result in results)
-            {
-                series.Points.Add(new SeriesPoint(DateTime.Now, result.Value));
-            }
         }
 
         private async Task RunBackgroundSearchAsync(string symbol, string stockId, DateTime startDate, DateTime endDate)
@@ -435,7 +420,6 @@ namespace DipScooper.UI
 
             return row;
         }
-
 
         private void InitializeChartControl()
         {

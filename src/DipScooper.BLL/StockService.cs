@@ -7,9 +7,7 @@ using DipScooper.Models.APIModels;
 
 namespace DipScooper.BLL
 {
-    /// <summary>
-    /// Klasse som håndterer beregninger og logikk knyttet til aksjeanalyse.
-    /// </summary>
+    // handles business logic related to stock analysis
     public class StockService
     {
         private ApiClient apiClient;
