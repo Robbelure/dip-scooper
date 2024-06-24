@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net7.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\DipScooper.DAL\DipScooper.DAL.csproj" />
+    <ProjectReference Include="..\DipScooper.Models\DipScooper.Models.csproj" />
+  </ItemGroup>
+
+</Project>
