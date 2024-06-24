@@ -160,6 +160,7 @@ namespace DipScooper.BLL
                 else
                 {
                     smaValues.Add(double.NaN);  // Sett til NaN for å markere at det ikke er nok data
+                    smaValues.Add(double.NaN);  // Sett til NaN for å markere at det ikke er nok data
                 }
             }
 
