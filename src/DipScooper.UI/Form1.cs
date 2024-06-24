@@ -18,17 +18,12 @@ namespace DipScooper.UI
 {
     public partial class Form1 : Form
     {
-        private ApiClient apiClient;
         private StockService stockService;
-        private DbContext dbContext;
 
         public Form1()
         {
             InitializeComponent();
-            apiClient = new ApiClient();
             stockService = new StockService();
-            dbContext = new DbContext();
-
             InitializeDateTimePicker(dateTimePickerStart);
             InitializeDateTimePicker(dateTimePickerEnd);
 
@@ -107,20 +102,14 @@ namespace DipScooper.UI
             lblStatus.ForeColor = System.Drawing.Color.Blue;
             dataGridView_stocks.Rows.Clear();
 
-            // searching db for stock
-            var stock = await dbContext.Stocks.Find(s => s.Symbol == symbol).FirstOrDefaultAsync();
-            if (stock == null)
-            {
-                stock = new Stock { Symbol = symbol, Name = "Unknown", Market = "Unknown" };
-                await dbContext.Stocks.InsertOneAsync(stock);
-            }
-
-            DateTime startDate = dateTimePickerStart.Value.Date;
-            DateTime endDate = dateTimePickerEnd.Value.Date;
-
             try
             {
-                var historicalDataList = await LoadDataToGrid(stock.Id, startDate, endDate);
+                var stock = await stockService.GetOrCreateStockAsync(symbol);
+
+                DateTime startDate = dateTimePickerStart.Value.Date;
+                DateTime endDate = dateTimePickerEnd.Value.Date;
+
+                var historicalDataList = await stockService.LoadHistoricalDataAsync(stock.Id, symbol, startDate, endDate);
                 if (historicalDataList.Any())
                 {
                     UpdateChartWithData(historicalDataList);
@@ -248,163 +237,10 @@ namespace DipScooper.UI
             chartControlStocks.Refresh();
         }
 
-        private async Task RunBackgroundSearchAsync(string symbol, string stockId, DateTime startDate, DateTime endDate)
-        {
-            try
-            {
-                string jsonData = await apiClient.GetTimeSeriesAsync(symbol, startDate.ToString("yyyy-MM-dd"), endDate.ToString("yyyy-MM-dd"));
-                Debug.WriteLine(jsonData);
-                if (string.IsNullOrEmpty(jsonData))
-                {
-                    throw new Exception("No data retrieved from the API.");
-                }
+       
+     
 
-                var historicalData = ProcessJsonData(jsonData, stockId);
-
-                var existingData = await dbContext.HistoricalData
-                    .Find(hd => hd.StockId == stockId && hd.Date >= startDate && hd.Date <= endDate)
-                    .ToListAsync();
-
-                var newData = historicalData
-                    .Where(newData => !existingData.Any(existing => existing.Date == newData.Date))
-                    .ToList();
-
-                if (newData.Any())
-                {
-                    await dbContext.HistoricalData.InsertManyAsync(newData);
-                }
-
-                Invoke(new Action(() =>
-                {
-                    foreach (var data in newData)
-                    {
-                        dataGridView_stocks.Rows.Add(CreateRowFromData(data));
-                    }
-                    UpdateChartWithData(existingData.Concat(newData).ToList());
-                    lblStatus.Text = "Data loaded successfully.";
-                    lblStatus.ForeColor = Color.Green;
-                }));
-            }
-            catch (Exception ex)
-            {
-                Invoke(new Action(() =>
-                {
-                    lblStatus.Text = $"Error: {ex.Message}";
-                    lblStatus.ForeColor = Color.Red;
-                }));
-            }
-            finally
-            {
-                Invoke(new Action(() =>
-                {
-                    progressBar_search.Visible = false;
-                }));
-            }
-        }
-
-        private List<(DateTime, DateTime)> GetMissingDateRanges(DateTime startDate, DateTime endDate, List<DateTime> existingDates)
-        {
-            List<(DateTime, DateTime)> missingRanges = new List<(DateTime, DateTime)>();
-
-            DateTime current = startDate;
-            while (current <= endDate)
-            {
-                if (!existingDates.Contains(current))
-                {
-                    DateTime rangeStart = current;
-                    while (current <= endDate && !existingDates.Contains(current))
-                    {
-                        current = current.AddDays(1);
-                    }
-                    DateTime rangeEnd = current.AddDays(-1);
-                    missingRanges.Add((rangeStart, rangeEnd));
-                }
-                current = current.AddDays(1);
-            }
-
-            return missingRanges;
-        }
-
-        private List<HistoricalData> ProcessJsonData(string jsonData, string stockId)
-        {
-            if (string.IsNullOrEmpty(jsonData))
-                throw new ArgumentException("JSON data is null or empty.");
-
-            var jsonDocument = JsonDocument.Parse(jsonData);
-            var root = jsonDocument.RootElement.GetProperty("results");
-            List<HistoricalData> historicalDataList = new List<HistoricalData>();
-
-            foreach (var result in root.EnumerateArray())
-            {
-                try
-                {
-                    if (result.TryGetProperty("t", out var tProperty) &&
-                        result.TryGetProperty("o", out var oProperty) &&
-                        result.TryGetProperty("h", out var hProperty) &&
-                        result.TryGetProperty("l", out var lProperty) &&
-                        result.TryGetProperty("c", out var cProperty) &&
-                        result.TryGetProperty("v", out var vProperty))
-                    {
-                        HistoricalData historicalData = new HistoricalData
-                        {
-                            StockId = stockId,
-                            Date = DateTimeOffset.FromUnixTimeMilliseconds(tProperty.GetInt64()).DateTime,
-                            Open = oProperty.GetDouble(),
-                            High = hProperty.GetDouble(),
-                            Low = lProperty.GetDouble(),
-                            Close = cProperty.GetDouble(),
-                            Volume = Convert.ToInt64(vProperty.GetDouble())
-                        };
-
-                        historicalDataList.Add(historicalData);
-                        Debug.WriteLine($"Processed data for date: {historicalData.Date}");
-                    }
-                    else
-                    {
-                        Debug.WriteLine("Missing one or more properties in the result element.");
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Debug.WriteLine($"Error processing result: {result}");
-                    Debug.WriteLine($"Exception: {ex.Message}");
-                    Debug.WriteLine($"StackTrace: {ex.StackTrace}");
-                    throw;
-                }
-            }
-
-            Debug.WriteLine("Finished processing JSON data.");
-            return historicalDataList;
-        }
-
-        private async Task<List<HistoricalData>> LoadDataToGrid(string stockId, DateTime startDate, DateTime endDate)
-        {
-            var historicalDataList = await dbContext.HistoricalData
-                .Find(hd => hd.StockId == stockId && hd.Date >= startDate && hd.Date <= endDate)
-                .ToListAsync();
-
-            var existingDates = historicalDataList.Select(hd => hd.Date).ToList();
-
-            if (historicalDataList.Count > 0)
-            {
-                foreach (var data in historicalDataList)
-                {
-                    if (!dataGridView_stocks.Rows.Cast<DataGridViewRow>().Any(r => r.Cells["Date"].Value.ToString() == data.Date.ToString("yyyy-MM-dd")))
-                    {
-                        dataGridView_stocks.Rows.Add(CreateRowFromData(data));
-                    }
-                }
-            }
-
-            var missingRanges = GetMissingDateRanges(startDate, endDate, existingDates);
-
-            foreach (var (rangeStart, rangeEnd) in missingRanges)
-            {
-                await RunBackgroundSearchAsync(textBoxSearch.Text.Trim().ToUpper(), stockId, rangeStart, rangeEnd);
-            }
-
-            return historicalDataList;
-        }
+       
 
         private DataGridViewRow CreateRowFromData(HistoricalData data)
         {
@@ -456,8 +292,8 @@ namespace DipScooper.UI
 
             diagram.AxisX.DateTimeScaleOptions.WorkdaysOnly = true;
             diagram.AxisX.DateTimeScaleOptions.AggregateFunction = AggregateFunction.None;
-            diagram.AxisX.DateTimeScaleOptions.MeasureUnit = DateTimeMeasureUnit.Day;
-            diagram.AxisX.DateTimeScaleOptions.GridAlignment = DateTimeGridAlignment.Day;
+            diagram.AxisX.DateTimeScaleOptions.MeasureUnit = DateTimeMeasureUnit.Week;
+            diagram.AxisX.DateTimeScaleOptions.GridAlignment = DateTimeGridAlignment.Week;
 
             diagram.AxisX.Title.Text = "Date";
             diagram.AxisX.Title.Visibility = DevExpress.Utils.DefaultBoolean.True;
@@ -465,8 +301,8 @@ namespace DipScooper.UI
             diagram.AxisY.Title.Visibility = DevExpress.Utils.DefaultBoolean.True;
 
             SecondaryAxisY secondaryAxisYVolume = new SecondaryAxisY("Volume Axis");
-            secondaryAxisYVolume.WholeRange.Auto = false;
-            secondaryAxisYVolume.WholeRange.SetMinMaxValues(0, 3000000000);
+            secondaryAxisYVolume.WholeRange.Auto = true;
+            secondaryAxisYVolume.WholeRange.SetMinMaxValues(500000, 3000000000);
             diagram.SecondaryAxesY.Add(secondaryAxisYVolume);
             ((BarSeriesView)volumeSeries.View).AxisY = secondaryAxisYVolume;
 
