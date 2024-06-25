@@ -1,5 +1,6 @@
 ﻿using System.Data;
 using System.Diagnostics;
+using System.Globalization;
 using System.Text.Json;
 using DipScooper.BLL.Calculators;
 using DipScooper.Dal.Data;
@@ -44,20 +45,35 @@ namespace DipScooper.BLL
         }
 
         // laster historiske data fra databasen, og henter manglende data fra APIet hvis nødvendig
-        public async Task<List<HistoricalData>> LoadHistoricalDataAsync(string stockId, string symbol, DateTime startDate, DateTime endDate)
+        public async Task<List<HistoricalData>> LoadDataWithProgressAsync(string symbol, DateTime startDate, DateTime endDate, IProgress<int> progress)
         {
+            progress.Report(0);
+
+            var stock = await GetOrCreateStockAsync(symbol);
+            progress.Report(20);
+
             var historicalDataList = await dbContext.HistoricalData
-                .Find(hd => hd.StockId == stockId && hd.Date >= startDate && hd.Date <= endDate)
+                .Find(hd => hd.StockId == stock.Id && hd.Date >= startDate && hd.Date <= endDate)
                 .ToListAsync();
+            progress.Report(40);
 
             var existingDates = historicalDataList.Select(hd => hd.Date).ToList();
+            progress.Report(50);
 
             var missingRanges = GetMissingDateRanges(startDate, endDate, existingDates);
+            progress.Report(60);
 
             foreach (var (rangeStart, rangeEnd) in missingRanges)
             {
-                await RunBackgroundSearchAsync(stockId, symbol, rangeStart, rangeEnd);
+                await RunBackgroundSearchAsync(stock.Id, symbol, rangeStart, rangeEnd);
+                progress.Report(80);
             }
+
+            // Hente oppdatert historisk data etter API-kall for manglende data
+            historicalDataList = await dbContext.HistoricalData
+                .Find(hd => hd.StockId == stock.Id && hd.Date >= startDate && hd.Date <= endDate)
+                .ToListAsync();
+            progress.Report(100);
 
             return historicalDataList;
         }
@@ -187,7 +203,7 @@ namespace DipScooper.BLL
             }
 
             double peRatio = peRatioCalculator.Calculate(marketPrice, earningsPerShare);
-            results.Add(new CalculationResult("P/E Ratio", peRatio));
+            results.Add(new CalculationResult("P/E Ratio", Math.Round(peRatio, 5)));
 
             List<double> trailingEPS = await apiClient.GetTrailingEPSAsync(symbol);
             if (trailingEPS == null || trailingEPS.Count < 4)
@@ -196,7 +212,7 @@ namespace DipScooper.BLL
             }
             double totalEPS = trailingEPS.Sum();
             double trailingPERatio = marketPrice / totalEPS;
-            results.Add(new CalculationResult("Trailing P/E Ratio", trailingPERatio));
+            results.Add(new CalculationResult("Trailing P/E Ratio", Math.Round(trailingPERatio, 5)));
 
             return results;
         }
@@ -213,7 +229,7 @@ namespace DipScooper.BLL
             }
 
             double pbRatio = pbRatioCalculator.Calculate(marketPrice, bookValuePerShare);
-            results.Add(new CalculationResult("P/B Ratio", pbRatio));
+            results.Add(new CalculationResult("P/B Ratio", Math.Round(pbRatio, 5)));
 
             return results;
         }
@@ -228,7 +244,7 @@ namespace DipScooper.BLL
             }
 
             double dcfValue = dcfCalculator.Calculate(cashFlows.Select(cf => cf.NetCashFlow).ToList(), discountRate);
-            results.Add(new CalculationResult("DCF Value", dcfValue));
+            results.Add(new CalculationResult("DCF Value", Math.Round(dcfValue, 5)));
 
             return results;
         }
@@ -243,7 +259,7 @@ namespace DipScooper.BLL
             }
 
             double ddmValue = ddmCalculator.Calculate(lastDividend, growthRate, discountRate);
-            results.Add(new CalculationResult("Dividend Discount Model Value", ddmValue));
+            results.Add(new CalculationResult("Dividend Discount Model Value", Math.Round(ddmValue, 5)));
 
             return results;
         }

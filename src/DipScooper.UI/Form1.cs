@@ -36,8 +36,61 @@ namespace DipScooper.UI
             dataGridView_analyze.AutoGenerateColumns = false;
             InitializeDataGridViewAnalyzeColumns();
 
+            InitializeDataGridViewDipSignals();
+
             InitializeChartControl();
         }
+
+        private void InitializeDataGridViewDipSignals()
+        {
+            dataGridView_dipSignals.Columns.Clear();
+            dataGridView_dipSignals.Columns.Add("Date", "Date");
+            dataGridView_dipSignals.Columns.Add("DipType", "Dip Type");
+            dataGridView_dipSignals.Columns.Add("Signal", "Signal");
+            dataGridView_dipSignals.Columns.Add("Value", "Value");
+        }
+
+        private void CheckForDipSignals(List<HistoricalData> historicalDataList)
+        {
+            List<double> closePrices = historicalDataList.Select(hd => hd.Close).ToList();
+            List<CalculationResult> rsiResults = stockService.CalculateRSI(closePrices);
+            List<CalculationResult> sma50Results = stockService.CalculateSMA(closePrices, 50);
+            List<CalculationResult> sma200Results = stockService.CalculateSMA(closePrices, 200);
+
+            for (int i = 0; i < historicalDataList.Count; i++)
+            {
+                var data = historicalDataList[i];
+
+                var rsiValue = rsiResults.ElementAtOrDefault(i)?.Value;
+                var sma50Value = sma50Results.ElementAtOrDefault(i)?.Value;
+                var sma200Value = sma200Results.ElementAtOrDefault(i)?.Value;
+
+                if (rsiValue < 23)
+                {
+                    // Legg til et signal i en ny DataGridView for dips
+                    var rowIndex = dataGridView_dipSignals.Rows.Add(data.Date.ToString("yyyy-MM-dd"), "SUPER-DIP", $"RSI = {rsiValue:F2}", data.Close);
+                    dataGridView_dipSignals.Rows[rowIndex].DefaultCellStyle.BackColor = Color.Purple;
+                }
+                else if (rsiValue < 25)
+                {
+                    // Legg til et signal i en ny DataGridView for dips
+                    dataGridView_dipSignals.Rows.Add(data.Date.ToString("yyyy-MM-dd"), "Big Dip", $"RSI = {rsiValue:F2}", data.Close);
+                }
+                else if (rsiValue < 30)
+                {
+                    // Legg til et signal i en ny DataGridView for dips
+                    dataGridView_dipSignals.Rows.Add(data.Date.ToString("yyyy-MM-dd"), "Normal Dip", $"RSI = {rsiValue:F2}", data.Close);
+                }
+
+                if (sma50Value < sma200Value)
+                {
+                    // Legg til et signal i en ny DataGridView for dips
+                    dataGridView_dipSignals.Rows.Add(data.Date.ToString("yyyy-MM-dd"), "Normal Dip", $"SMA50 = {sma50Value:F2} < SMA200 = {sma200Value:F2}", data.Close);
+                }
+            }
+        }
+
+
 
         private async void btnCalculate_Click(object sender, EventArgs e)
         {
@@ -77,7 +130,6 @@ namespace DipScooper.UI
                     results.AddRange(await stockService.CalculateDDM(symbol, growthRate, discountRate));
                 }
 
-                // Oppdater DataGridView med resultatene
                 UpdateUIComponents(results);
             }
             catch (Exception ex)
@@ -97,23 +149,32 @@ namespace DipScooper.UI
             }
 
             progressBar_search.Visible = true;
-            progressBar_search.Value = 0;
-            lblStatus.Text = "Searching...";
-            lblStatus.ForeColor = System.Drawing.Color.Blue;
+            progressBar_search.Minimum = 0;
             dataGridView_stocks.Rows.Clear();
+            dataGridView_dipSignals.Rows.Clear();
 
             try
             {
-                var stock = await stockService.GetOrCreateStockAsync(symbol);
+                var progress = new Progress<int>(value => progressBar_search.Value = value);
 
                 DateTime startDate = dateTimePickerStart.Value.Date;
                 DateTime endDate = dateTimePickerEnd.Value.Date;
 
-                var historicalDataList = await stockService.LoadHistoricalDataAsync(stock.Id, symbol, startDate, endDate);
+                var historicalDataList = await stockService.LoadDataWithProgressAsync(symbol, startDate, endDate, progress);
+
                 if (historicalDataList.Any())
                 {
+                    InitializeChartControl();
                     UpdateChartWithData(historicalDataList);
                     chartControlStocks.Refresh();
+
+                    foreach (var data in historicalDataList)
+                    {
+                        dataGridView_stocks.Rows.Add(CreateRowFromData(data));
+                    }
+
+                    // Sjekk for dip signaler
+                    CheckForDipSignals(historicalDataList);
                 }
             }
             catch (Exception ex)
@@ -124,8 +185,8 @@ namespace DipScooper.UI
             finally
             {
                 progressBar_search.Visible = false;
-                lblStatus.Text = "Ready";
-                lblStatus.ForeColor = System.Drawing.Color.Black;
+                //lblStatus.Text = "Loaded Successfully";
+                //lblStatus.ForeColor = System.Drawing.Color.Green;
             }
         }
 
@@ -135,24 +196,9 @@ namespace DipScooper.UI
             foreach (var result in results)
             {
                 DataGridViewRow row = new DataGridViewRow();
-                row.CreateCells(dataGridView_analyze, result.Name, result.Value);
+                row.CreateCells(dataGridView_analyze, result.Name, result.Value, result.Value.ToString("F5"));
                 dataGridView_analyze.Rows.Add(row);
-
-                UpdateChartWithResult(result);
             }
-
-            chartControlStocks.Refresh();
-        }
-
-        private void UpdateChartWithResult(CalculationResult result)
-        {
-            var series = chartControlStocks.Series.FirstOrDefault(s => s.Name == result.Name) as Series;
-            if (series == null)
-            {
-                series = new Series(result.Name, ViewType.Line);
-                chartControlStocks.Series.Add(series);
-            }
-            series.Points.Add(new SeriesPoint(DateTime.Now, result.Value));
         }
 
         private void UpdateChartWithData(List<HistoricalData> historicalDataList)
@@ -237,22 +283,17 @@ namespace DipScooper.UI
             chartControlStocks.Refresh();
         }
 
-       
-     
-
-       
-
         private DataGridViewRow CreateRowFromData(HistoricalData data)
         {
             var row = new DataGridViewRow();
             row.CreateCells(dataGridView_stocks);
 
             row.Cells[0].Value = data.Date.ToString("yyyy-MM-dd");
-            row.Cells[1].Value = data.Open;
-            row.Cells[2].Value = data.High;
-            row.Cells[3].Value = data.Low;
-            row.Cells[4].Value = data.Close;
-            row.Cells[5].Value = data.Volume;
+            row.Cells[1].Value = data.Open.ToString("F1");
+            row.Cells[2].Value = data.High.ToString("F1");
+            row.Cells[3].Value = data.Low.ToString("F1");
+            row.Cells[4].Value = data.Close.ToString("F1");
+            row.Cells[5].Value = data.Volume.ToString("N0");
 
             return row;
         }
@@ -284,37 +325,67 @@ namespace DipScooper.UI
             CandleStickSeriesView candleStickView = (CandleStickSeriesView)candlestickSeries.View;
             candleStickView.ReductionOptions.ColorMode = ReductionColorMode.OpenToCloseValue;
             candleStickView.ReductionOptions.Level = StockLevel.Close;
-            candleStickView.LineThickness = 3;
-            candleStickView.LevelLineLength = 0.7;
+            candleStickView.LineThickness = 2;
+            candleStickView.LevelLineLength = 0.5;
             candleStickView.Color = Color.Green;
 
             XYDiagram diagram = (XYDiagram)chartControlStocks.Diagram;
 
+            // Set the background color for the diagram area
+            diagram.DefaultPane.BackColor = Color.DimGray;
+            diagram.DefaultPane.FillStyle.FillMode = FillMode.Solid;
+
+            diagram.SecondaryAxesY.Clear();
+
+
             diagram.AxisX.DateTimeScaleOptions.WorkdaysOnly = true;
             diagram.AxisX.DateTimeScaleOptions.AggregateFunction = AggregateFunction.None;
-            diagram.AxisX.DateTimeScaleOptions.MeasureUnit = DateTimeMeasureUnit.Week;
-            diagram.AxisX.DateTimeScaleOptions.GridAlignment = DateTimeGridAlignment.Week;
+            diagram.AxisX.DateTimeScaleOptions.MeasureUnit = DateTimeMeasureUnit.Day;
+            diagram.AxisX.DateTimeScaleOptions.GridAlignment = DateTimeGridAlignment.Month;
+
+            diagram.AxisX.Label.TextPattern = "{A:MMM-yyyy}";
+            diagram.AxisX.Label.Angle = -45;
+            diagram.AxisX.Label.ResolveOverlappingOptions.AllowRotate = false;
+            diagram.AxisX.Label.ResolveOverlappingOptions.AllowStagger = true;
+            diagram.AxisX.Label.TextColor = Color.White;
+            diagram.AxisX.Label.Font = new Font("Segoe UI", 8, FontStyle.Regular);
 
             diagram.AxisX.Title.Text = "Date";
             diagram.AxisX.Title.Visibility = DevExpress.Utils.DefaultBoolean.True;
-            diagram.AxisY.Title.Text = "Price";
+            diagram.AxisX.Title.TextColor = Color.White;
+            diagram.AxisX.Title.Font = new Font("Segoe UI", 12, FontStyle.Bold);
+            diagram.AxisY.Title.Text = "Price/RSI";
             diagram.AxisY.Title.Visibility = DevExpress.Utils.DefaultBoolean.True;
+            diagram.AxisY.Title.TextColor = Color.White;
+            diagram.AxisY.Title.Font = new Font("Segoe UI", 12, FontStyle.Bold);
+            diagram.AxisY.Label.TextColor = Color.White;
+            diagram.AxisY.Label.Font = new Font("Segoe UI", 8, FontStyle.Regular);
 
             SecondaryAxisY secondaryAxisYVolume = new SecondaryAxisY("Volume Axis");
-            secondaryAxisYVolume.WholeRange.Auto = true;
-            secondaryAxisYVolume.WholeRange.SetMinMaxValues(500000, 3000000000);
+            secondaryAxisYVolume.WholeRange.SetMinMaxValues(0, 3000000000);
+            secondaryAxisYVolume.Label.TextColor = Color.White;
+            secondaryAxisYVolume.Label.Font = new Font("Segoe UI", 8, FontStyle.Regular);
+            secondaryAxisYVolume.Label.TextPattern = "{V:#,0,,}M";
             diagram.SecondaryAxesY.Add(secondaryAxisYVolume);
             ((BarSeriesView)volumeSeries.View).AxisY = secondaryAxisYVolume;
 
-            SecondaryAxisY secondaryAxisYRSI = new SecondaryAxisY("RSI Axis");
-            diagram.SecondaryAxesY.Add(secondaryAxisYRSI);
-            ((LineSeriesView)rsiSeries.View).AxisY = secondaryAxisYRSI;
+
+            ((LineSeriesView)rsiSeries.View).AxisY = diagram.AxisY;
 
             chartControlStocks.Titles.Clear();
             ChartTitle chartTitle = new ChartTitle();
             chartTitle.Text = "Stock Data Chart";
+            chartTitle.TextColor = Color.White;
+            chartTitle.Font = new Font("Segoe UI", 14, FontStyle.Bold);
             chartControlStocks.Titles.Add(chartTitle);
             chartControlStocks.Legend.Visibility = DevExpress.Utils.DefaultBoolean.True;
+
+            // Set the legend background color
+            chartControlStocks.Legend.BackColor = Color.DimGray;
+            chartControlStocks.Legend.FillStyle.FillMode = FillMode.Solid;
+            //chartControlStocks.Legend.Font = new Font("Arial", 8, FontStyle.Regular);
+            chartControlStocks.Legend.Font = new Font("Segoe UI", 8, FontStyle.Bold);
+            chartControlStocks.Legend.TextColor = Color.White;
 
             BarSeriesView? barView = volumeSeries.View as BarSeriesView;
             if (barView != null)
@@ -401,7 +472,6 @@ namespace DipScooper.UI
 
         private void TimerStatus_Tick(object sender, EventArgs e)
         {
-            lblStatus.Text = string.Empty;
             TimerStatus.Stop();
         }
 
