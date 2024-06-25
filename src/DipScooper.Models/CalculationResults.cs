@@ -9,7 +9,7 @@
         public CalculationResult(string name, double value)
         {
             Name = name;
-            Value = value;
+            Value = Math.Round(value, 5);
         }
     }
 }

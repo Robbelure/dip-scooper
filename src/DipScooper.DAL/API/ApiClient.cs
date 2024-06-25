@@ -229,7 +229,7 @@ namespace DipScooper.DAL.API
                 if (results.GetArrayLength() > 0)
                 {
                     var latestDividend = results[0];
-                    return latestDividend.GetProperty("amount").GetDouble(); 
+                    return latestDividend.GetProperty("amount").GetDouble();
                 }
                 else
                 {

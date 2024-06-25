@@ -38,6 +38,10 @@ namespace DipScooper.UI
             DataGridViewCellStyle dataGridViewCellStyle4 = new DataGridViewCellStyle();
             DataGridViewCellStyle dataGridViewCellStyle5 = new DataGridViewCellStyle();
             DataGridViewCellStyle dataGridViewCellStyle6 = new DataGridViewCellStyle();
+            DataGridViewCellStyle dataGridViewCellStyle7 = new DataGridViewCellStyle();
+            DataGridViewCellStyle dataGridViewCellStyle8 = new DataGridViewCellStyle();
+            DataGridViewCellStyle dataGridViewCellStyle9 = new DataGridViewCellStyle();
+            System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(Form1));
             dataGridView_stocks = new DataGridView();
             DateColumn = new DataGridViewTextBoxColumn();
             OpenColumn = new DataGridViewTextBoxColumn();
@@ -46,9 +50,8 @@ namespace DipScooper.UI
             CloseColumn = new DataGridViewTextBoxColumn();
             VolumeColumn = new DataGridViewTextBoxColumn();
             BtnSearch = new Button();
-            lblStatus = new Label();
             textBoxSearch = new TextBox();
-            TimerStatus = new System.Windows.Forms.Timer(components);
+            TimerStatus = new Timer(components);
             checkBoxPERatio = new CheckBox();
             checkBoxPBRatio = new CheckBox();
             checkBoxDCF = new CheckBox();
@@ -62,9 +65,12 @@ namespace DipScooper.UI
             progressBar_search = new ProgressBar();
             backgroundWorker_search = new System.ComponentModel.BackgroundWorker();
             chartControlStocks = new DevExpress.XtraCharts.ChartControl();
+            dataGridView_dipSignals = new DataGridView();
+            labelControl1 = new DevExpress.XtraEditors.LabelControl();
             ((System.ComponentModel.ISupportInitialize)dataGridView_stocks).BeginInit();
             ((System.ComponentModel.ISupportInitialize)dataGridView_analyze).BeginInit();
             ((System.ComponentModel.ISupportInitialize)chartControlStocks).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)dataGridView_dipSignals).BeginInit();
             SuspendLayout();
             // 
             // dataGridView_stocks
@@ -96,7 +102,7 @@ namespace DipScooper.UI
             dataGridView_stocks.Name = "dataGridView_stocks";
             dataGridView_stocks.ReadOnly = true;
             dataGridViewCellStyle3.Alignment = DataGridViewContentAlignment.MiddleLeft;
-            dataGridViewCellStyle3.BackColor = Color.Gray;
+            dataGridViewCellStyle3.BackColor = Color.DimGray;
             dataGridViewCellStyle3.Font = new Font("Segoe UI", 9F, FontStyle.Regular, GraphicsUnit.Point);
             dataGridViewCellStyle3.ForeColor = Color.Gold;
             dataGridViewCellStyle3.SelectionBackColor = SystemColors.Highlight;
@@ -105,41 +111,47 @@ namespace DipScooper.UI
             dataGridView_stocks.RowHeadersDefaultCellStyle = dataGridViewCellStyle3;
             dataGridView_stocks.RowHeadersVisible = false;
             dataGridView_stocks.RowTemplate.Height = 25;
-            dataGridView_stocks.Size = new Size(328, 161);
+            dataGridView_stocks.Size = new Size(328, 132);
             dataGridView_stocks.TabIndex = 1;
             // 
             // DateColumn
             // 
+            DateColumn.FillWeight = 131.254349F;
             DateColumn.HeaderText = "Date";
             DateColumn.Name = "DateColumn";
             DateColumn.ReadOnly = true;
             // 
             // OpenColumn
             // 
+            OpenColumn.FillWeight = 82.63412F;
             OpenColumn.HeaderText = "Open";
             OpenColumn.Name = "OpenColumn";
             OpenColumn.ReadOnly = true;
             // 
             // HighColumn
             // 
+            HighColumn.FillWeight = 85.3231049F;
             HighColumn.HeaderText = "High";
             HighColumn.Name = "HighColumn";
             HighColumn.ReadOnly = true;
             // 
             // LowColumn
             // 
+            LowColumn.FillWeight = 84.0873642F;
             LowColumn.HeaderText = "Low";
             LowColumn.Name = "LowColumn";
             LowColumn.ReadOnly = true;
             // 
             // CloseColumn
             // 
+            CloseColumn.FillWeight = 79.64507F;
             CloseColumn.HeaderText = "Close";
             CloseColumn.Name = "CloseColumn";
             CloseColumn.ReadOnly = true;
             // 
             // VolumeColumn
             // 
+            VolumeColumn.FillWeight = 137.0558F;
             VolumeColumn.HeaderText = "Volume";
             VolumeColumn.Name = "VolumeColumn";
             VolumeColumn.ReadOnly = true;
@@ -150,22 +162,13 @@ namespace DipScooper.UI
             BtnSearch.FlatStyle = FlatStyle.Flat;
             BtnSearch.Font = new Font("Segoe UI Semibold", 9.75F, FontStyle.Bold, GraphicsUnit.Point);
             BtnSearch.ForeColor = Color.Gold;
-            BtnSearch.Location = new Point(12, 40);
+            BtnSearch.Location = new Point(12, 36);
             BtnSearch.Name = "BtnSearch";
             BtnSearch.Size = new Size(114, 27);
             BtnSearch.TabIndex = 2;
             BtnSearch.Text = "Search";
             BtnSearch.UseVisualStyleBackColor = false;
             BtnSearch.Click += BtnSearch_Click;
-            // 
-            // lblStatus
-            // 
-            lblStatus.Font = new Font("Bahnschrift", 9.75F, FontStyle.Regular, GraphicsUnit.Point);
-            lblStatus.ForeColor = Color.Lime;
-            lblStatus.Location = new Point(12, 496);
-            lblStatus.Name = "lblStatus";
-            lblStatus.Size = new Size(105, 24);
-            lblStatus.TabIndex = 3;
             // 
             // textBoxSearch
             // 
@@ -182,9 +185,9 @@ namespace DipScooper.UI
             // checkBoxPERatio
             // 
             checkBoxPERatio.AutoSize = true;
-            checkBoxPERatio.BackColor = Color.DimGray;
+            checkBoxPERatio.BackColor = Color.DarkSlateGray;
             checkBoxPERatio.ForeColor = Color.Gold;
-            checkBoxPERatio.Location = new Point(12, 238);
+            checkBoxPERatio.Location = new Point(12, 209);
             checkBoxPERatio.Name = "checkBoxPERatio";
             checkBoxPERatio.Size = new Size(76, 19);
             checkBoxPERatio.TabIndex = 5;
@@ -194,9 +197,9 @@ namespace DipScooper.UI
             // checkBoxPBRatio
             // 
             checkBoxPBRatio.AutoSize = true;
-            checkBoxPBRatio.BackColor = Color.DimGray;
+            checkBoxPBRatio.BackColor = Color.DarkSlateGray;
             checkBoxPBRatio.ForeColor = Color.Gold;
-            checkBoxPBRatio.Location = new Point(12, 263);
+            checkBoxPBRatio.Location = new Point(148, 209);
             checkBoxPBRatio.Name = "checkBoxPBRatio";
             checkBoxPBRatio.Size = new Size(77, 19);
             checkBoxPBRatio.TabIndex = 6;
@@ -206,9 +209,9 @@ namespace DipScooper.UI
             // checkBoxDCF
             // 
             checkBoxDCF.AutoSize = true;
-            checkBoxDCF.BackColor = Color.DimGray;
+            checkBoxDCF.BackColor = Color.DarkSlateGray;
             checkBoxDCF.ForeColor = Color.Gold;
-            checkBoxDCF.Location = new Point(95, 238);
+            checkBoxDCF.Location = new Point(94, 209);
             checkBoxDCF.Name = "checkBoxDCF";
             checkBoxDCF.Size = new Size(48, 19);
             checkBoxDCF.TabIndex = 7;
@@ -218,9 +221,9 @@ namespace DipScooper.UI
             // checkBoxDDM
             // 
             checkBoxDDM.AutoSize = true;
-            checkBoxDDM.BackColor = Color.DimGray;
+            checkBoxDDM.BackColor = Color.DarkSlateGray;
             checkBoxDDM.ForeColor = Color.Gold;
-            checkBoxDDM.Location = new Point(95, 263);
+            checkBoxDDM.Location = new Point(231, 209);
             checkBoxDDM.Name = "checkBoxDDM";
             checkBoxDDM.Size = new Size(53, 19);
             checkBoxDDM.TabIndex = 8;
@@ -233,7 +236,7 @@ namespace DipScooper.UI
             btnCalculate.FlatStyle = FlatStyle.Flat;
             btnCalculate.Font = new Font("Segoe UI Semibold", 9.75F, FontStyle.Bold, GraphicsUnit.Point);
             btnCalculate.ForeColor = Color.Gold;
-            btnCalculate.Location = new Point(12, 291);
+            btnCalculate.Location = new Point(12, 234);
             btnCalculate.Name = "btnCalculate";
             btnCalculate.Size = new Size(114, 27);
             btnCalculate.TabIndex = 9;
@@ -258,7 +261,7 @@ namespace DipScooper.UI
             dataGridView_analyze.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
             dataGridView_analyze.Columns.AddRange(new DataGridViewColumn[] { CalculationColumn, ResultColumn });
             dataGridViewCellStyle5.Alignment = DataGridViewContentAlignment.MiddleLeft;
-            dataGridViewCellStyle5.BackColor = Color.Gray;
+            dataGridViewCellStyle5.BackColor = Color.DimGray;
             dataGridViewCellStyle5.Font = new Font("Segoe UI", 9F, FontStyle.Regular, GraphicsUnit.Point);
             dataGridViewCellStyle5.ForeColor = Color.Gold;
             dataGridViewCellStyle5.SelectionBackColor = SystemColors.Highlight;
@@ -266,10 +269,10 @@ namespace DipScooper.UI
             dataGridViewCellStyle5.WrapMode = DataGridViewTriState.False;
             dataGridView_analyze.DefaultCellStyle = dataGridViewCellStyle5;
             dataGridView_analyze.GridColor = Color.Gold;
-            dataGridView_analyze.Location = new Point(12, 324);
+            dataGridView_analyze.Location = new Point(12, 267);
             dataGridView_analyze.Name = "dataGridView_analyze";
             dataGridViewCellStyle6.Alignment = DataGridViewContentAlignment.MiddleLeft;
-            dataGridViewCellStyle6.BackColor = Color.Gray;
+            dataGridViewCellStyle6.BackColor = Color.DimGray;
             dataGridViewCellStyle6.Font = new Font("Segoe UI", 9F, FontStyle.Regular, GraphicsUnit.Point);
             dataGridViewCellStyle6.ForeColor = Color.Gold;
             dataGridViewCellStyle6.SelectionBackColor = SystemColors.Highlight;
@@ -278,7 +281,7 @@ namespace DipScooper.UI
             dataGridView_analyze.RowHeadersDefaultCellStyle = dataGridViewCellStyle6;
             dataGridView_analyze.RowHeadersVisible = false;
             dataGridView_analyze.RowTemplate.Height = 25;
-            dataGridView_analyze.Size = new Size(221, 159);
+            dataGridView_analyze.Size = new Size(328, 99);
             dataGridView_analyze.TabIndex = 10;
             // 
             // CalculationColumn
@@ -315,24 +318,81 @@ namespace DipScooper.UI
             // 
             // progressBar_search
             // 
-            progressBar_search.Location = new Point(12, 31);
+            progressBar_search.Location = new Point(12, 27);
             progressBar_search.Name = "progressBar_search";
             progressBar_search.Size = new Size(328, 3);
             progressBar_search.TabIndex = 13;
             // 
             // chartControlStocks
             // 
+            chartControlStocks.BackColor = Color.DimGray;
+            chartControlStocks.Legend.BackColor = Color.SlateGray;
+            chartControlStocks.Legend.Border.Color = Color.SlateGray;
             chartControlStocks.Location = new Point(346, 7);
             chartControlStocks.Name = "chartControlStocks";
-            chartControlStocks.Size = new Size(853, 543);
+            chartControlStocks.Size = new Size(656, 359);
             chartControlStocks.TabIndex = 14;
+            // 
+            // dataGridView_dipSignals
+            // 
+            dataGridView_dipSignals.AllowUserToAddRows = false;
+            dataGridView_dipSignals.AllowUserToDeleteRows = false;
+            dataGridView_dipSignals.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+            dataGridView_dipSignals.BackgroundColor = Color.DimGray;
+            dataGridViewCellStyle7.Alignment = DataGridViewContentAlignment.MiddleLeft;
+            dataGridViewCellStyle7.BackColor = Color.Gray;
+            dataGridViewCellStyle7.Font = new Font("Segoe UI", 9F, FontStyle.Regular, GraphicsUnit.Point);
+            dataGridViewCellStyle7.ForeColor = Color.Gold;
+            dataGridViewCellStyle7.SelectionBackColor = SystemColors.Highlight;
+            dataGridViewCellStyle7.SelectionForeColor = SystemColors.HighlightText;
+            dataGridViewCellStyle7.WrapMode = DataGridViewTriState.True;
+            dataGridView_dipSignals.ColumnHeadersDefaultCellStyle = dataGridViewCellStyle7;
+            dataGridView_dipSignals.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
+            dataGridViewCellStyle8.Alignment = DataGridViewContentAlignment.MiddleLeft;
+            dataGridViewCellStyle8.BackColor = Color.DarkSlateGray;
+            dataGridViewCellStyle8.Font = new Font("Segoe UI", 9F, FontStyle.Regular, GraphicsUnit.Point);
+            dataGridViewCellStyle8.ForeColor = Color.Gold;
+            dataGridViewCellStyle8.SelectionBackColor = SystemColors.Highlight;
+            dataGridViewCellStyle8.SelectionForeColor = SystemColors.HighlightText;
+            dataGridViewCellStyle8.WrapMode = DataGridViewTriState.False;
+            dataGridView_dipSignals.DefaultCellStyle = dataGridViewCellStyle8;
+            dataGridView_dipSignals.GridColor = Color.Gold;
+            dataGridView_dipSignals.Location = new Point(12, 397);
+            dataGridView_dipSignals.Name = "dataGridView_dipSignals";
+            dataGridViewCellStyle9.Alignment = DataGridViewContentAlignment.MiddleLeft;
+            dataGridViewCellStyle9.BackColor = Color.DarkSlateGray;
+            dataGridViewCellStyle9.Font = new Font("Segoe UI", 9F, FontStyle.Regular, GraphicsUnit.Point);
+            dataGridViewCellStyle9.ForeColor = Color.Gold;
+            dataGridViewCellStyle9.SelectionBackColor = SystemColors.Highlight;
+            dataGridViewCellStyle9.SelectionForeColor = SystemColors.HighlightText;
+            dataGridViewCellStyle9.WrapMode = DataGridViewTriState.True;
+            dataGridView_dipSignals.RowHeadersDefaultCellStyle = dataGridViewCellStyle9;
+            dataGridView_dipSignals.RowHeadersVisible = false;
+            dataGridView_dipSignals.RowTemplate.Height = 25;
+            dataGridView_dipSignals.Size = new Size(990, 143);
+            dataGridView_dipSignals.TabIndex = 15;
+            // 
+            // labelControl1
+            // 
+            labelControl1.Appearance.BackColor = Color.DarkSlateGray;
+            labelControl1.Appearance.Font = new Font("Segoe UI Semibold", 12F, FontStyle.Bold, GraphicsUnit.Point);
+            labelControl1.Appearance.Options.UseBackColor = true;
+            labelControl1.Appearance.Options.UseFont = true;
+            labelControl1.AutoSizeMode = DevExpress.XtraEditors.LabelAutoSizeMode.None;
+            labelControl1.Location = new Point(432, 372);
+            labelControl1.Name = "labelControl1";
+            labelControl1.Size = new Size(109, 21);
+            labelControl1.TabIndex = 16;
+            labelControl1.Text = "Scoop the Dip!";
             // 
             // Form1
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
-            BackColor = Color.DimGray;
-            ClientSize = new Size(1211, 562);
+            BackColor = Color.DarkSlateGray;
+            ClientSize = new Size(1014, 552);
+            Controls.Add(labelControl1);
+            Controls.Add(dataGridView_dipSignals);
             Controls.Add(chartControlStocks);
             Controls.Add(progressBar_search);
             Controls.Add(dateTimePickerEnd);
@@ -344,16 +404,17 @@ namespace DipScooper.UI
             Controls.Add(checkBoxPBRatio);
             Controls.Add(checkBoxPERatio);
             Controls.Add(textBoxSearch);
-            Controls.Add(lblStatus);
             Controls.Add(BtnSearch);
             Controls.Add(dataGridView_stocks);
             ForeColor = Color.Gold;
+            Icon = (Icon)resources.GetObject("$this.Icon");
             Name = "Form1";
             Text = "DipScooper";
             Load += Form1_Load;
             ((System.ComponentModel.ISupportInitialize)dataGridView_stocks).EndInit();
             ((System.ComponentModel.ISupportInitialize)dataGridView_analyze).EndInit();
             ((System.ComponentModel.ISupportInitialize)chartControlStocks).EndInit();
+            ((System.ComponentModel.ISupportInitialize)dataGridView_dipSignals).EndInit();
             ResumeLayout(false);
             PerformLayout();
         }
@@ -362,9 +423,8 @@ namespace DipScooper.UI
 
         private DataGridView dataGridView_stocks;
         private Button BtnSearch;
-        private Label lblStatus;
         private TextBox textBoxSearch;
-        private System.Windows.Forms.Timer TimerStatus;
+        private Timer TimerStatus;
         private CheckBox checkBoxPERatio;
         private CheckBox checkBoxPBRatio;
         private CheckBox checkBoxDCF;
@@ -373,16 +433,18 @@ namespace DipScooper.UI
         private DataGridView dataGridView_analyze;
         private DateTimePicker dateTimePickerStart;
         private DateTimePicker dateTimePickerEnd;
+        private DataGridViewTextBoxColumn CalculationColumn;
+        private DataGridViewTextBoxColumn ResultColumn;
+        private ProgressBar progressBar_search;
+        private System.ComponentModel.BackgroundWorker backgroundWorker_search;
+        private DevExpress.XtraCharts.ChartControl chartControlStocks;
         private DataGridViewTextBoxColumn DateColumn;
         private DataGridViewTextBoxColumn OpenColumn;
         private DataGridViewTextBoxColumn HighColumn;
         private DataGridViewTextBoxColumn LowColumn;
         private DataGridViewTextBoxColumn CloseColumn;
         private DataGridViewTextBoxColumn VolumeColumn;
-        private DataGridViewTextBoxColumn CalculationColumn;
-        private DataGridViewTextBoxColumn ResultColumn;
-        private ProgressBar progressBar_search;
-        private System.ComponentModel.BackgroundWorker backgroundWorker_search;
-        private DevExpress.XtraCharts.ChartControl chartControlStocks;
+        private DataGridView dataGridView_dipSignals;
+        private DevExpress.XtraEditors.LabelControl labelControl1;
     }
 }
