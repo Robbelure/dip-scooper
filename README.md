@@ -2,7 +2,7 @@
 
 DipScooper is a tool for analyzing stock data, helping you scoop up the dips in the stock market by calculating various financial indicators.
 
-![image](images/screenshotDipScooper2.PNG)
+![Screenshot](images/screenshotDipScooper2.PNG)
 
 ## Installation
 
