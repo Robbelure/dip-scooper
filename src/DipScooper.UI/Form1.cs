@@ -279,7 +279,7 @@ namespace DipScooper.UI
             diagram.AxisY.Label.Font = new Font("Segoe UI", 8, FontStyle.Regular);
 
             SecondaryAxisY secondaryAxisYVolume = new SecondaryAxisY("Volume Axis");
-            secondaryAxisYVolume.WholeRange.SetMinMaxValues(0, 3000000000);
+            secondaryAxisYVolume.WholeRange.SetMinMaxValues(0, 1000000000);
             secondaryAxisYVolume.Label.TextColor = Color.White;
             secondaryAxisYVolume.Label.Font = new Font("Segoe UI", 8, FontStyle.Regular);
             secondaryAxisYVolume.Label.TextPattern = "{V:#,0,,}M";
@@ -297,10 +297,8 @@ namespace DipScooper.UI
             chartControlStocks.Titles.Add(chartTitle);
             chartControlStocks.Legend.Visibility = DevExpress.Utils.DefaultBoolean.True;
 
-            // Set the legend background color
             chartControlStocks.Legend.BackColor = Color.DimGray;
             chartControlStocks.Legend.FillStyle.FillMode = FillMode.Solid;
-            //chartControlStocks.Legend.Font = new Font("Arial", 8, FontStyle.Regular);
             chartControlStocks.Legend.Font = new Font("Segoe UI", 8, FontStyle.Bold);
             chartControlStocks.Legend.TextColor = Color.White;
 
