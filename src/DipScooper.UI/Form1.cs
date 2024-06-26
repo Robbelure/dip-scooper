@@ -1,16 +1,12 @@
-using System.Text.Json;
 using System.Diagnostics;
 using DevExpress.XtraCharts;
 using MongoDB.Driver;
 using System.Windows.Forms;
 using DipScooper.Models.Models;
-using System.Threading.Tasks;
 using System.Collections.Generic;
 using System;
 using System.Drawing;
-using DipScooper.DAL.API;
 using DipScooper.BLL;
-using DipScooper.Dal.Data;
 using System.Linq;
 using DipScooper.Models;
 
@@ -24,73 +20,64 @@ namespace DipScooper.UI
         {
             InitializeComponent();
             stockService = new StockService();
-            InitializeDateTimePicker(dateTimePickerStart);
-            InitializeDateTimePicker(dateTimePickerEnd);
+            InitializeControls();
+        }
 
-            SetPlaceholderText(textBoxSearch, "Enter ticker symbol (example: Tesla = TSLA)");
-            textBoxSearch.GotFocus += RemovePlaceholderText;
-            textBoxSearch.LostFocus += ShowPlaceholderText;
-
-            dataGridView_stocks.AutoGenerateColumns = false;
-            InitializeDataGridViewStocksColumns();
-            dataGridView_analyze.AutoGenerateColumns = false;
-            InitializeDataGridViewAnalyzeColumns();
-
-            InitializeDataGridViewDipSignals();
-
+        private void InitializeControls()
+        {
+            InitializeDateTimePickers();
+            InitializeTextBoxSearch();
+            InitializeDataGridViews();
             InitializeChartControl();
         }
 
-        private void InitializeDataGridViewDipSignals()
+        private async void BtnSearch_Click(object sender, EventArgs e)
         {
-            dataGridView_dipSignals.Columns.Clear();
-            dataGridView_dipSignals.Columns.Add("Date", "Date");
-            dataGridView_dipSignals.Columns.Add("DipType", "Dip Type");
-            dataGridView_dipSignals.Columns.Add("Signal", "Signal");
-            dataGridView_dipSignals.Columns.Add("Value", "Value");
-        }
-
-        private void CheckForDipSignals(List<HistoricalData> historicalDataList)
-        {
-            List<double> closePrices = historicalDataList.Select(hd => hd.Close).ToList();
-            List<CalculationResult> rsiResults = stockService.CalculateRSI(closePrices);
-            List<CalculationResult> sma50Results = stockService.CalculateSMA(closePrices, 50);
-            List<CalculationResult> sma200Results = stockService.CalculateSMA(closePrices, 200);
-
-            for (int i = 0; i < historicalDataList.Count; i++)
+            string symbol = textBoxSearch.Text.Trim().ToUpper();
+            if (string.IsNullOrEmpty(symbol))
             {
-                var data = historicalDataList[i];
+                MessageBox.Show("Please enter a valid stock symbol.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
 
-                var rsiValue = rsiResults.ElementAtOrDefault(i)?.Value;
-                var sma50Value = sma50Results.ElementAtOrDefault(i)?.Value;
-                var sma200Value = sma200Results.ElementAtOrDefault(i)?.Value;
+            progressBar_search.Visible = true;
+            progressBar_search.Minimum = 0;
+            dataGridView_stocks.Rows.Clear();
+            dataGridView_dipSignals.Rows.Clear();
 
-                if (rsiValue < 23)
-                {
-                    // Legg til et signal i en ny DataGridView for dips
-                    var rowIndex = dataGridView_dipSignals.Rows.Add(data.Date.ToString("yyyy-MM-dd"), "SUPER-DIP", $"RSI = {rsiValue:F2}", data.Close);
-                    dataGridView_dipSignals.Rows[rowIndex].DefaultCellStyle.BackColor = Color.Purple;
-                }
-                else if (rsiValue < 25)
-                {
-                    // Legg til et signal i en ny DataGridView for dips
-                    dataGridView_dipSignals.Rows.Add(data.Date.ToString("yyyy-MM-dd"), "Big Dip", $"RSI = {rsiValue:F2}", data.Close);
-                }
-                else if (rsiValue < 30)
-                {
-                    // Legg til et signal i en ny DataGridView for dips
-                    dataGridView_dipSignals.Rows.Add(data.Date.ToString("yyyy-MM-dd"), "Normal Dip", $"RSI = {rsiValue:F2}", data.Close);
-                }
+            try
+            {
+                var progress = new Progress<int>(value => progressBar_search.Value = value);
 
-                if (sma50Value < sma200Value)
+                DateTime startDate = dateTimePickerStart.Value.Date;
+                DateTime endDate = dateTimePickerEnd.Value.Date;
+
+                var historicalDataList = await stockService.LoadDataWithProgressAsync(symbol, startDate, endDate, progress);
+
+                if (historicalDataList.Any())
                 {
-                    // Legg til et signal i en ny DataGridView for dips
-                    dataGridView_dipSignals.Rows.Add(data.Date.ToString("yyyy-MM-dd"), "Normal Dip", $"SMA50 = {sma50Value:F2} < SMA200 = {sma200Value:F2}", data.Close);
+                    InitializeChartControl();
+                    UpdateChartWithData(historicalDataList);
+                    chartControlStocks.Refresh();
+
+                    foreach (var data in historicalDataList)
+                    {
+                        dataGridView_stocks.Rows.Add(CreateRowFromData(data));
+                    }
+
+                    CheckForDipSignals(historicalDataList);
                 }
             }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Failed to load data: " + ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                Debug.WriteLine("Exception: " + ex.Message + "\nStackTrace: " + ex.StackTrace);
+            }
+            finally
+            {
+                progressBar_search.Visible = false;
+            }
         }
-
-
 
         private async void btnCalculate_Click(object sender, EventArgs e)
         {
@@ -139,56 +126,194 @@ namespace DipScooper.UI
             }
         }
 
-        private async void BtnSearch_Click(object sender, EventArgs e)
+        private void Form1_Load(object sender, EventArgs e)
         {
-            string symbol = textBoxSearch.Text.Trim().ToUpper();
-            if (string.IsNullOrEmpty(symbol))
+            progressBar_search.Visible = false;
+        }
+
+        #region Initialization Methods
+
+        private void InitializeDateTimePickers()
+        {
+            InitializeDateTimePicker(dateTimePickerStart);
+            InitializeDateTimePicker(dateTimePickerEnd);
+        }
+
+        private void InitializeDateTimePicker(DateTimePicker dateTimePicker)
+        {
+            dateTimePicker.Format = DateTimePickerFormat.Custom;
+            dateTimePicker.CustomFormat = "'Select Date...'";
+            dateTimePicker.Font = new Font("Arial", 8.25F, FontStyle.Regular, GraphicsUnit.Point, 0);
+            dateTimePicker.Tag = false;
+
+            dateTimePicker.DropDown += (s, e) =>
             {
-                MessageBox.Show("Please enter a valid stock symbol.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                return;
-            }
+                dateTimePicker.CustomFormat = "dd.MM.yyyy";
+            };
 
-            progressBar_search.Visible = true;
-            progressBar_search.Minimum = 0;
-            dataGridView_stocks.Rows.Clear();
-            dataGridView_dipSignals.Rows.Clear();
-
-            try
+            dateTimePicker.CloseUp += (s, e) =>
             {
-                var progress = new Progress<int>(value => progressBar_search.Value = value);
-
-                DateTime startDate = dateTimePickerStart.Value.Date;
-                DateTime endDate = dateTimePickerEnd.Value.Date;
-
-                var historicalDataList = await stockService.LoadDataWithProgressAsync(symbol, startDate, endDate, progress);
-
-                if (historicalDataList.Any())
+                if (!(bool)dateTimePicker.Tag)
                 {
-                    InitializeChartControl();
-                    UpdateChartWithData(historicalDataList);
-                    chartControlStocks.Refresh();
-
-                    foreach (var data in historicalDataList)
-                    {
-                        dataGridView_stocks.Rows.Add(CreateRowFromData(data));
-                    }
-
-                    // Sjekk for dip signaler
-                    CheckForDipSignals(historicalDataList);
+                    dateTimePicker.CustomFormat = "'Select Date...'";
                 }
-            }
-            catch (Exception ex)
+            };
+
+            dateTimePicker.ValueChanged += (s, e) =>
             {
-                MessageBox.Show("Failed to load data: " + ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                Debug.WriteLine("Exception: " + ex.Message + "\nStackTrace: " + ex.StackTrace);
-            }
-            finally
+                dateTimePicker.Tag = true;
+            };
+
+            dateTimePicker.Leave += (s, e) =>
             {
-                progressBar_search.Visible = false;
-                //lblStatus.Text = "Loaded Successfully";
-                //lblStatus.ForeColor = System.Drawing.Color.Green;
+                ActiveControl = null;
+            };
+        }
+
+        private void InitializeTextBoxSearch()
+        {
+            SetPlaceholderText(textBoxSearch, "Enter ticker symbol (example: Tesla = TSLA)");
+            textBoxSearch.GotFocus += RemovePlaceholderText;
+            textBoxSearch.LostFocus += ShowPlaceholderText;
+        }
+
+        private void InitializeDataGridViews()
+        {
+            dataGridView_stocks.AutoGenerateColumns = false;
+            InitializeDataGridViewStocksColumns();
+
+            dataGridView_analyze.AutoGenerateColumns = false;
+            InitializeDataGridViewAnalyzeColumns();
+
+            InitializeDataGridViewDipSignals();
+        }
+
+        private void InitializeDataGridViewStocksColumns()
+        {
+            dataGridView_stocks.Columns.Clear();
+            dataGridView_stocks.Columns.Add("Date", "Date");
+            dataGridView_stocks.Columns.Add("Open", "Open");
+            dataGridView_stocks.Columns.Add("High", "High");
+            dataGridView_stocks.Columns.Add("Low", "Low");
+            dataGridView_stocks.Columns.Add("Close", "Close");
+            dataGridView_stocks.Columns.Add("Volume", "Volume");
+        }
+
+        private void InitializeDataGridViewAnalyzeColumns()
+        {
+            dataGridView_analyze.Columns.Clear();
+            dataGridView_analyze.Columns.Add("Calculation", "Calculation");
+            dataGridView_analyze.Columns.Add("Result", "Result");
+        }
+
+        private void InitializeDataGridViewDipSignals()
+        {
+            dataGridView_dipSignals.Columns.Clear();
+            dataGridView_dipSignals.Columns.Add("Date", "Date");
+            dataGridView_dipSignals.Columns.Add("DipType", "Dip Type");
+            dataGridView_dipSignals.Columns.Add("Signal", "Signal");
+            dataGridView_dipSignals.Columns.Add("Value", "Value");
+        }
+
+        private void InitializeChartControl()
+        {
+            chartControlStocks.Series.Clear();
+
+            Series closeSeries = new Series("Close", ViewType.Line);
+            Series volumeSeries = new Series("Volume", ViewType.Bar);
+            Series rsiSeries = new Series("RSI", ViewType.Line);
+            Series candlestickSeries = new Series("Price", ViewType.CandleStick);
+            Series sma50Series = new Series("SMA50", ViewType.Line);
+            Series sma200Series = new Series("SMA200", ViewType.Line);
+
+            chartControlStocks.Series.Add(closeSeries);
+            chartControlStocks.Series.Add(volumeSeries);
+            chartControlStocks.Series.Add(rsiSeries);
+            chartControlStocks.Series.Add(candlestickSeries);
+            chartControlStocks.Series.Add(sma50Series);
+            chartControlStocks.Series.Add(sma200Series);
+
+            ((LineSeriesView)closeSeries.View).Color = Color.Blue;
+            ((BarSeriesView)volumeSeries.View).Color = Color.Red;
+            ((LineSeriesView)rsiSeries.View).Color = Color.Black;
+            ((LineSeriesView)sma50Series.View).Color = Color.Yellow;
+            ((LineSeriesView)sma200Series.View).Color = Color.Purple;
+
+            CandleStickSeriesView candleStickView = (CandleStickSeriesView)candlestickSeries.View;
+            candleStickView.ReductionOptions.ColorMode = ReductionColorMode.OpenToCloseValue;
+            candleStickView.ReductionOptions.Level = StockLevel.Close;
+            candleStickView.LineThickness = 2;
+            candleStickView.LevelLineLength = 0.5;
+            candleStickView.Color = Color.Green;
+
+            XYDiagram diagram = (XYDiagram)chartControlStocks.Diagram;
+
+            // Set the background color for the diagram area
+            diagram.DefaultPane.BackColor = Color.DimGray;
+            diagram.DefaultPane.FillStyle.FillMode = FillMode.Solid;
+
+            diagram.SecondaryAxesY.Clear();
+
+
+            diagram.AxisX.DateTimeScaleOptions.WorkdaysOnly = true;
+            diagram.AxisX.DateTimeScaleOptions.AggregateFunction = AggregateFunction.None;
+            diagram.AxisX.DateTimeScaleOptions.MeasureUnit = DateTimeMeasureUnit.Day;
+            diagram.AxisX.DateTimeScaleOptions.GridAlignment = DateTimeGridAlignment.Month;
+
+            diagram.AxisX.Label.TextPattern = "{A:MMM-yyyy}";
+            diagram.AxisX.Label.Angle = -45;
+            diagram.AxisX.Label.ResolveOverlappingOptions.AllowRotate = false;
+            diagram.AxisX.Label.ResolveOverlappingOptions.AllowStagger = true;
+            diagram.AxisX.Label.TextColor = Color.White;
+            diagram.AxisX.Label.Font = new Font("Segoe UI", 8, FontStyle.Regular);
+
+            diagram.AxisX.Title.Text = "Date";
+            diagram.AxisX.Title.Visibility = DevExpress.Utils.DefaultBoolean.True;
+            diagram.AxisX.Title.TextColor = Color.White;
+            diagram.AxisX.Title.Font = new Font("Segoe UI", 12, FontStyle.Bold);
+            diagram.AxisY.Title.Text = "Price/RSI";
+            diagram.AxisY.Title.Visibility = DevExpress.Utils.DefaultBoolean.True;
+            diagram.AxisY.Title.TextColor = Color.White;
+            diagram.AxisY.Title.Font = new Font("Segoe UI", 12, FontStyle.Bold);
+            diagram.AxisY.Label.TextColor = Color.White;
+            diagram.AxisY.Label.Font = new Font("Segoe UI", 8, FontStyle.Regular);
+
+            SecondaryAxisY secondaryAxisYVolume = new SecondaryAxisY("Volume Axis");
+            secondaryAxisYVolume.WholeRange.SetMinMaxValues(0, 3000000000);
+            secondaryAxisYVolume.Label.TextColor = Color.White;
+            secondaryAxisYVolume.Label.Font = new Font("Segoe UI", 8, FontStyle.Regular);
+            secondaryAxisYVolume.Label.TextPattern = "{V:#,0,,}M";
+            diagram.SecondaryAxesY.Add(secondaryAxisYVolume);
+            ((BarSeriesView)volumeSeries.View).AxisY = secondaryAxisYVolume;
+
+
+            ((LineSeriesView)rsiSeries.View).AxisY = diagram.AxisY;
+
+            chartControlStocks.Titles.Clear();
+            ChartTitle chartTitle = new ChartTitle();
+            chartTitle.Text = "Stock Data Chart";
+            chartTitle.TextColor = Color.White;
+            chartTitle.Font = new Font("Segoe UI", 14, FontStyle.Bold);
+            chartControlStocks.Titles.Add(chartTitle);
+            chartControlStocks.Legend.Visibility = DevExpress.Utils.DefaultBoolean.True;
+
+            // Set the legend background color
+            chartControlStocks.Legend.BackColor = Color.DimGray;
+            chartControlStocks.Legend.FillStyle.FillMode = FillMode.Solid;
+            //chartControlStocks.Legend.Font = new Font("Arial", 8, FontStyle.Regular);
+            chartControlStocks.Legend.Font = new Font("Segoe UI", 8, FontStyle.Bold);
+            chartControlStocks.Legend.TextColor = Color.White;
+
+            BarSeriesView? barView = volumeSeries.View as BarSeriesView;
+            if (barView != null)
+            {
+                barView.BarWidth = 0.3;
             }
         }
+
+        #endregion
+
+        #region UI Update Methods
 
         private void UpdateUIComponents(List<CalculationResult> results)
         {
@@ -298,150 +423,25 @@ namespace DipScooper.UI
             return row;
         }
 
-        private void InitializeChartControl()
+        private void CheckForDipSignals(List<HistoricalData> historicalDataList)
         {
-            chartControlStocks.Series.Clear();
+            dataGridView_dipSignals.Rows.Clear();
 
-            Series closeSeries = new Series("Close", ViewType.Line);
-            Series volumeSeries = new Series("Volume", ViewType.Bar);
-            Series rsiSeries = new Series("RSI", ViewType.Line);
-            Series candlestickSeries = new Series("Price", ViewType.CandleStick);
-            Series sma50Series = new Series("SMA50", ViewType.Line);
-            Series sma200Series = new Series("SMA200", ViewType.Line);
+            List<DipSignal> dipSignals = stockService.CalculateDipSignals(historicalDataList);
 
-            chartControlStocks.Series.Add(closeSeries);
-            chartControlStocks.Series.Add(volumeSeries);
-            chartControlStocks.Series.Add(rsiSeries);
-            chartControlStocks.Series.Add(candlestickSeries);
-            chartControlStocks.Series.Add(sma50Series);
-            chartControlStocks.Series.Add(sma200Series);
-
-            ((LineSeriesView)closeSeries.View).Color = Color.Blue;
-            ((BarSeriesView)volumeSeries.View).Color = Color.Red;
-            ((LineSeriesView)rsiSeries.View).Color = Color.Black;
-            ((LineSeriesView)sma50Series.View).Color = Color.Yellow;
-            ((LineSeriesView)sma200Series.View).Color = Color.Purple;
-
-            CandleStickSeriesView candleStickView = (CandleStickSeriesView)candlestickSeries.View;
-            candleStickView.ReductionOptions.ColorMode = ReductionColorMode.OpenToCloseValue;
-            candleStickView.ReductionOptions.Level = StockLevel.Close;
-            candleStickView.LineThickness = 2;
-            candleStickView.LevelLineLength = 0.5;
-            candleStickView.Color = Color.Green;
-
-            XYDiagram diagram = (XYDiagram)chartControlStocks.Diagram;
-
-            // Set the background color for the diagram area
-            diagram.DefaultPane.BackColor = Color.DimGray;
-            diagram.DefaultPane.FillStyle.FillMode = FillMode.Solid;
-
-            diagram.SecondaryAxesY.Clear();
-
-
-            diagram.AxisX.DateTimeScaleOptions.WorkdaysOnly = true;
-            diagram.AxisX.DateTimeScaleOptions.AggregateFunction = AggregateFunction.None;
-            diagram.AxisX.DateTimeScaleOptions.MeasureUnit = DateTimeMeasureUnit.Day;
-            diagram.AxisX.DateTimeScaleOptions.GridAlignment = DateTimeGridAlignment.Month;
-
-            diagram.AxisX.Label.TextPattern = "{A:MMM-yyyy}";
-            diagram.AxisX.Label.Angle = -45;
-            diagram.AxisX.Label.ResolveOverlappingOptions.AllowRotate = false;
-            diagram.AxisX.Label.ResolveOverlappingOptions.AllowStagger = true;
-            diagram.AxisX.Label.TextColor = Color.White;
-            diagram.AxisX.Label.Font = new Font("Segoe UI", 8, FontStyle.Regular);
-
-            diagram.AxisX.Title.Text = "Date";
-            diagram.AxisX.Title.Visibility = DevExpress.Utils.DefaultBoolean.True;
-            diagram.AxisX.Title.TextColor = Color.White;
-            diagram.AxisX.Title.Font = new Font("Segoe UI", 12, FontStyle.Bold);
-            diagram.AxisY.Title.Text = "Price/RSI";
-            diagram.AxisY.Title.Visibility = DevExpress.Utils.DefaultBoolean.True;
-            diagram.AxisY.Title.TextColor = Color.White;
-            diagram.AxisY.Title.Font = new Font("Segoe UI", 12, FontStyle.Bold);
-            diagram.AxisY.Label.TextColor = Color.White;
-            diagram.AxisY.Label.Font = new Font("Segoe UI", 8, FontStyle.Regular);
-
-            SecondaryAxisY secondaryAxisYVolume = new SecondaryAxisY("Volume Axis");
-            secondaryAxisYVolume.WholeRange.SetMinMaxValues(0, 3000000000);
-            secondaryAxisYVolume.Label.TextColor = Color.White;
-            secondaryAxisYVolume.Label.Font = new Font("Segoe UI", 8, FontStyle.Regular);
-            secondaryAxisYVolume.Label.TextPattern = "{V:#,0,,}M";
-            diagram.SecondaryAxesY.Add(secondaryAxisYVolume);
-            ((BarSeriesView)volumeSeries.View).AxisY = secondaryAxisYVolume;
-
-
-            ((LineSeriesView)rsiSeries.View).AxisY = diagram.AxisY;
-
-            chartControlStocks.Titles.Clear();
-            ChartTitle chartTitle = new ChartTitle();
-            chartTitle.Text = "Stock Data Chart";
-            chartTitle.TextColor = Color.White;
-            chartTitle.Font = new Font("Segoe UI", 14, FontStyle.Bold);
-            chartControlStocks.Titles.Add(chartTitle);
-            chartControlStocks.Legend.Visibility = DevExpress.Utils.DefaultBoolean.True;
-
-            // Set the legend background color
-            chartControlStocks.Legend.BackColor = Color.DimGray;
-            chartControlStocks.Legend.FillStyle.FillMode = FillMode.Solid;
-            //chartControlStocks.Legend.Font = new Font("Arial", 8, FontStyle.Regular);
-            chartControlStocks.Legend.Font = new Font("Segoe UI", 8, FontStyle.Bold);
-            chartControlStocks.Legend.TextColor = Color.White;
-
-            BarSeriesView? barView = volumeSeries.View as BarSeriesView;
-            if (barView != null)
+            foreach (var signal in dipSignals)
             {
-                barView.BarWidth = 0.3;
+                var rowIndex = dataGridView_dipSignals.Rows.Add(signal.Date, signal.DipType, signal.Signal, signal.Value);
+                if (signal.DipType == "SUPER-DIP")
+                {
+                    dataGridView_dipSignals.Rows[rowIndex].DefaultCellStyle.BackColor = Color.Purple;
+                }
             }
         }
 
-        private void InitializeDateTimePicker(DateTimePicker dateTimePicker)
-        {
-            dateTimePicker.Format = DateTimePickerFormat.Custom;
-            dateTimePicker.CustomFormat = "'Select Date...'";
-            dateTimePicker.Font = new Font("Arial", 8.25F, FontStyle.Regular, GraphicsUnit.Point, 0);
-            dateTimePicker.Tag = false;
+        #endregion
 
-            dateTimePicker.DropDown += (s, e) =>
-            {
-                dateTimePicker.CustomFormat = "dd.MM.yyyy";
-            };
-
-            dateTimePicker.CloseUp += (s, e) =>
-            {
-                if (!(bool)dateTimePicker.Tag)
-                {
-                    dateTimePicker.CustomFormat = "'Select Date...'";
-                }
-            };
-
-            dateTimePicker.ValueChanged += (s, e) =>
-            {
-                dateTimePicker.Tag = true;
-            };
-
-            dateTimePicker.Leave += (s, e) =>
-            {
-                ActiveControl = null;
-            };
-        }
-
-        private void InitializeDataGridViewStocksColumns()
-        {
-            dataGridView_stocks.Columns.Clear();
-            dataGridView_stocks.Columns.Add("Date", "Date");
-            dataGridView_stocks.Columns.Add("Open", "Open");
-            dataGridView_stocks.Columns.Add("High", "High");
-            dataGridView_stocks.Columns.Add("Low", "Low");
-            dataGridView_stocks.Columns.Add("Close", "Close");
-            dataGridView_stocks.Columns.Add("Volume", "Volume");
-        }
-
-        private void InitializeDataGridViewAnalyzeColumns()
-        {
-            dataGridView_analyze.Columns.Clear();
-            dataGridView_analyze.Columns.Add("Calculation", "Calculation");
-            dataGridView_analyze.Columns.Add("Result", "Result");
-        }
+        #region Placeholder Text Methods
 
         private void SetPlaceholderText(TextBox textBox, string placeholderText)
         {
@@ -470,6 +470,10 @@ namespace DipScooper.UI
             }
         }
 
+        #endregion
+
+        #region Status Timer Methods
+
         private void TimerStatus_Tick(object sender, EventArgs e)
         {
             TimerStatus.Stop();
@@ -480,9 +484,6 @@ namespace DipScooper.UI
             TimerStatus.Start();
         }
 
-        private void Form1_Load(object sender, EventArgs e)
-        {
-            progressBar_search.Visible = false;
-        }
+        #endregion
     }
 }

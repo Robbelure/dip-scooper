@@ -1,6 +1,5 @@
 ﻿using System.Data;
 using System.Diagnostics;
-using System.Globalization;
 using System.Text.Json;
 using DipScooper.BLL.Calculators;
 using DipScooper.Dal.Data;
@@ -12,7 +11,10 @@ using MongoDB.Driver;
 
 namespace DipScooper.BLL
 {
-    // handles business logic related to stock analysis
+    /// <summary>
+    /// Responsible for handling the business logic related to stock analysis. 
+    /// It communicates with the ApiClient to fetch and processes the data, and performs various calculations.
+    /// </summary>
     public class StockService
     {
         private ApiClient apiClient;
@@ -32,164 +34,75 @@ namespace DipScooper.BLL
             ddmCalculator = new DDMCalculator();
         }
 
-        // sjekker og returnerer aksjeinformasjonen fra databasen
-        public async Task<Stock> GetOrCreateStockAsync(string symbol)
+        #region Calculations
+
+        /// <summary>
+        /// Calculates dip signals based on historical data.
+        /// </summary>
+        /// <param name="historicalDataList">List of historical data.</param>
+        /// <returns>List of dip signals.</returns>
+        public List<DipSignal> CalculateDipSignals(List<HistoricalData> historicalDataList)
         {
-            var stock = await dbContext.Stocks.Find(s => s.Symbol == symbol).FirstOrDefaultAsync();
-            if (stock == null)
+            List<double> closePrices = historicalDataList.Select(hd => hd.Close).ToList();
+            List<CalculationResult> rsiResults = CalculateRSI(closePrices);
+            List<CalculationResult> sma50Results = CalculateSMA(closePrices, 50);
+            List<CalculationResult> sma200Results = CalculateSMA(closePrices, 200);
+
+            List<DipSignal> dipSignals = new List<DipSignal>();
+
+            for (int i = 0; i < historicalDataList.Count; i++)
             {
-                stock = new Stock { Symbol = symbol, Name = "Unknown", Market = "Unknown" };
-                await dbContext.Stocks.InsertOneAsync(stock);
-            }
-            return stock;
-        }
+                var data = historicalDataList[i];
 
-        // laster historiske data fra databasen, og henter manglende data fra APIet hvis nødvendig
-        public async Task<List<HistoricalData>> LoadDataWithProgressAsync(string symbol, DateTime startDate, DateTime endDate, IProgress<int> progress)
-        {
-            progress.Report(0);
+                var rsiValue = rsiResults.ElementAtOrDefault(i)?.Value;
+                var sma50Value = sma50Results.ElementAtOrDefault(i)?.Value;
+                var sma200Value = sma200Results.ElementAtOrDefault(i)?.Value;
 
-            var stock = await GetOrCreateStockAsync(symbol);
-            progress.Report(20);
-
-            var historicalDataList = await dbContext.HistoricalData
-                .Find(hd => hd.StockId == stock.Id && hd.Date >= startDate && hd.Date <= endDate)
-                .ToListAsync();
-            progress.Report(40);
-
-            var existingDates = historicalDataList.Select(hd => hd.Date).ToList();
-            progress.Report(50);
-
-            var missingRanges = GetMissingDateRanges(startDate, endDate, existingDates);
-            progress.Report(60);
-
-            foreach (var (rangeStart, rangeEnd) in missingRanges)
-            {
-                await RunBackgroundSearchAsync(stock.Id, symbol, rangeStart, rangeEnd);
-                progress.Report(80);
-            }
-
-            // Hente oppdatert historisk data etter API-kall for manglende data
-            historicalDataList = await dbContext.HistoricalData
-                .Find(hd => hd.StockId == stock.Id && hd.Date >= startDate && hd.Date <= endDate)
-                .ToListAsync();
-            progress.Report(100);
-
-            return historicalDataList;
-        }
-
-        // henter data fra APIet og setter det inn i databasen
-        public async Task<List<HistoricalData>> RunBackgroundSearchAsync(string stockId, string symbol, DateTime startDate, DateTime endDate)
-        {
-            string jsonData = await apiClient.GetTimeSeriesAsync(symbol, startDate.ToString("yyyy-MM-dd"), endDate.ToString("yyyy-MM-dd"));
-            if (string.IsNullOrEmpty(jsonData))
-            {
-                throw new Exception("No data retrieved from the API.");
-            }
-
-            var historicalData = ProcessJsonData(jsonData, stockId);
-
-            foreach (var data in historicalData)
-            {
-                var filter = Builders<HistoricalData>.Filter.And(
-                    Builders<HistoricalData>.Filter.Eq(hd => hd.StockId, stockId),
-                    Builders<HistoricalData>.Filter.Eq(hd => hd.Date, data.Date)
-                );
-
-                var update = Builders<HistoricalData>.Update
-                    .Set(hd => hd.Open, data.Open)
-                    .Set(hd => hd.High, data.High)
-                    .Set(hd => hd.Low, data.Low)
-                    .Set(hd => hd.Close, data.Close)
-                    .Set(hd => hd.Volume, data.Volume);
-
-                var updateOptions = new UpdateOptions { IsUpsert = true };
-                await dbContext.HistoricalData.UpdateOneAsync(filter, update, updateOptions);
-            }
-
-            var existingData = await dbContext.HistoricalData
-                .Find(hd => hd.StockId == stockId && hd.Date >= startDate && hd.Date <= endDate)
-                .ToListAsync();
-
-            return existingData;
-        }
-
-        private List<(DateTime, DateTime)> GetMissingDateRanges(DateTime startDate, DateTime endDate, List<DateTime> existingDates)
-        {
-            List<(DateTime, DateTime)> missingRanges = new List<(DateTime, DateTime)>();
-
-            DateTime current = startDate;
-            while (current <= endDate)
-            {
-                if (!existingDates.Contains(current))
+                if (rsiValue < 23)
                 {
-                    DateTime rangeStart = current;
-                    while (current <= endDate && !existingDates.Contains(current))
+                    dipSignals.Add(new DipSignal
                     {
-                        current = current.AddDays(1);
-                    }
-                    DateTime rangeEnd = current.AddDays(-1);
-                    missingRanges.Add((rangeStart, rangeEnd));
+                        Date = data.Date.ToString("yyyy-MM-dd"),
+                        DipType = "SUPER-DIP",
+                        Signal = $"RSI = {rsiValue:F2}",
+                        Value = data.Close
+                    });
                 }
-                current = current.AddDays(1);
-            }
-
-            return missingRanges;
-        }
-
-        public List<HistoricalData> ProcessJsonData(string jsonData, string stockId)
-        {
-            if (string.IsNullOrEmpty(jsonData))
-                throw new ArgumentException("JSON data is null or empty.");
-
-            var jsonDocument = JsonDocument.Parse(jsonData);
-            var root = jsonDocument.RootElement.GetProperty("results");
-            List<HistoricalData> historicalDataList = new List<HistoricalData>();
-
-            foreach (var result in root.EnumerateArray())
-            {
-                try
+                else if (rsiValue < 25)
                 {
-                    if (result.TryGetProperty("t", out var tProperty) &&
-                        result.TryGetProperty("o", out var oProperty) &&
-                        result.TryGetProperty("h", out var hProperty) &&
-                        result.TryGetProperty("l", out var lProperty) &&
-                        result.TryGetProperty("c", out var cProperty) &&
-                        result.TryGetProperty("v", out var vProperty))
+                    dipSignals.Add(new DipSignal
                     {
-                        HistoricalData historicalData = new HistoricalData
-                        {
-                            StockId = stockId,
-                            Date = DateTimeOffset.FromUnixTimeMilliseconds(tProperty.GetInt64()).DateTime,
-                            Open = oProperty.GetDouble(),
-                            High = hProperty.GetDouble(),
-                            Low = lProperty.GetDouble(),
-                            Close = cProperty.GetDouble(),
-                            Volume = Convert.ToInt64(vProperty.GetDouble())
-                        };
-
-                        historicalDataList.Add(historicalData);
-                        Debug.WriteLine($"Processed data for date: {historicalData.Date}");
-                    }
-                    else
-                    {
-                        Debug.WriteLine("Missing one or more properties in the result element.");
-                    }
+                        Date = data.Date.ToString("yyyy-MM-dd"),
+                        DipType = "Big Dip",
+                        Signal = $"RSI = {rsiValue:F2}",
+                        Value = data.Close
+                    });
                 }
-                catch (Exception ex)
+                else if (rsiValue < 30)
                 {
-                    Debug.WriteLine($"Error processing result: {result}");
-                    Debug.WriteLine($"Exception: {ex.Message}");
-                    Debug.WriteLine($"StackTrace: {ex.StackTrace}");
-                    throw;
+                    dipSignals.Add(new DipSignal
+                    {
+                        Date = data.Date.ToString("yyyy-MM-dd"),
+                        DipType = "Normal Dip",
+                        Signal = $"RSI = {rsiValue:F2}",
+                        Value = data.Close
+                    });
+                }
+
+                if (sma50Value < sma200Value)
+                {
+                    dipSignals.Add(new DipSignal
+                    {
+                        Date = data.Date.ToString("yyyy-MM-dd"),
+                        DipType = "Normal Dip",
+                        Signal = $"SMA50 = {sma50Value:F2} < SMA200 = {sma200Value:F2}",
+                        Value = data.Close
+                    });
                 }
             }
 
-            Debug.WriteLine("Finished processing JSON data.");
-            return historicalDataList;
+            return dipSignals;
         }
-
-
 
         public async Task<List<CalculationResult>> CalculatePERatio(string symbol)
         {
@@ -337,5 +250,177 @@ namespace DipScooper.BLL
 
             return results;
         }
+
+        #endregion
+
+
+        /// <summary>
+        /// Retrieves stock information from the database, creates a new entry if not found.
+        /// </summary>
+        public async Task<Stock> GetOrCreateStockAsync(string symbol)
+        {
+            var stock = await dbContext.Stocks.Find(s => s.Symbol == symbol).FirstOrDefaultAsync();
+            if (stock == null)
+            {
+                stock = new Stock { Symbol = symbol, Name = "Unknown", Market = "Unknown" };
+                await dbContext.Stocks.InsertOneAsync(stock);
+            }
+            return stock;
+        }
+
+
+        /// <summary>
+        /// Loads historical data from the database, fetches missing data from the API if necessary.
+        /// </summary>
+        public async Task<List<HistoricalData>> LoadDataWithProgressAsync(string symbol, DateTime startDate, DateTime endDate, IProgress<int> progress)
+        {
+            progress.Report(0);
+
+            var stock = await GetOrCreateStockAsync(symbol);
+            progress.Report(20);
+
+            var historicalDataList = await dbContext.HistoricalData
+                .Find(hd => hd.StockId == stock.Id && hd.Date >= startDate && hd.Date <= endDate)
+                .ToListAsync();
+            progress.Report(40);
+
+            var existingDates = historicalDataList.Select(hd => hd.Date).ToList();
+            progress.Report(50);
+
+            var missingRanges = GetMissingDateRanges(startDate, endDate, existingDates);
+            progress.Report(60);
+
+            foreach (var (rangeStart, rangeEnd) in missingRanges)
+            {
+                await FetchAndSaveHistoricalDataAsync(stock.Id, symbol, rangeStart, rangeEnd);
+                progress.Report(80);
+            }
+
+            // fetches updated historical data after API calls for missing data
+            historicalDataList = await dbContext.HistoricalData
+                .Find(hd => hd.StockId == stock.Id && hd.Date >= startDate && hd.Date <= endDate)
+                .ToListAsync();
+            progress.Report(100);
+
+            return historicalDataList;
+        }
+
+
+        /// <summary>
+        /// Fetches data from the API and inserts it into the database.
+        /// </summary>
+        /// <param name="stockId">The stock ID.</param>
+        /// <param name="symbol">The stock symbol.</param>
+        /// <param name="startDate">The start date for data retrieval.</param>
+        /// <param name="endDate">The end date for data retrieval.</param>
+        /// <returns>List of historical data.</returns>
+        public async Task<List<HistoricalData>> FetchAndSaveHistoricalDataAsync(string stockId, string symbol, DateTime startDate, DateTime endDate)
+        {
+            string jsonData = await apiClient.GetTimeSeriesAsync(symbol, startDate.ToString("yyyy-MM-dd"), endDate.ToString("yyyy-MM-dd"));
+            if (string.IsNullOrEmpty(jsonData))
+            {
+                throw new Exception("No data retrieved from the API.");
+            }
+
+            var historicalData = ProcessJsonData(jsonData, stockId);
+
+            await dbContext.SaveHistoricalData(historicalData);
+
+            var existingData = await dbContext.HistoricalData
+                .Find(hd => hd.StockId == stockId && hd.Date >= startDate && hd.Date <= endDate)
+                .ToListAsync();
+
+            return existingData;
+        }
+
+
+        /// <summary>
+        /// Identifies missing date ranges in the historical data.
+        /// </summary>
+        /// <param name="startDate">The start date for data retrieval.</param>
+        /// <param name="endDate">The end date for data retrieval.</param>
+        /// <param name="existingDates">List of existing dates in the data.</param>
+        /// <returns>List of tuples representing the missing date ranges.</returns>
+        private List<(DateTime, DateTime)> GetMissingDateRanges(DateTime startDate, DateTime endDate, List<DateTime> existingDates)
+        {
+            List<(DateTime, DateTime)> missingRanges = new List<(DateTime, DateTime)>();
+
+            DateTime current = startDate;
+            while (current <= endDate)
+            {
+                if (!existingDates.Contains(current))
+                {
+                    DateTime rangeStart = current;
+                    while (current <= endDate && !existingDates.Contains(current))
+                    {
+                        current = current.AddDays(1);
+                    }
+                    DateTime rangeEnd = current.AddDays(-1);
+                    missingRanges.Add((rangeStart, rangeEnd));
+                }
+                current = current.AddDays(1);
+            }
+
+            return missingRanges;
+        }
+
+
+        /// <summary>
+        /// Processes JSON data from the API and returns a list of HistoricalData objects.
+        /// </summary>
+        /// <param name="jsonData">The JSON data from the API.</param>
+        /// <param name="stockId">The stock ID.</param>
+        /// <returns>List of HistoricalData objects.</returns>
+        public List<HistoricalData> ProcessJsonData(string jsonData, string stockId)
+        {
+            if (string.IsNullOrEmpty(jsonData))
+                throw new ArgumentException("JSON data is null or empty.");
+
+            var jsonDocument = JsonDocument.Parse(jsonData);
+            var root = jsonDocument.RootElement.GetProperty("results");
+            List<HistoricalData> historicalDataList = new List<HistoricalData>();
+
+            foreach (var result in root.EnumerateArray())
+            {
+                try
+                {
+                    if (result.TryGetProperty("t", out var tProperty) &&
+                        result.TryGetProperty("o", out var oProperty) &&
+                        result.TryGetProperty("h", out var hProperty) &&
+                        result.TryGetProperty("l", out var lProperty) &&
+                        result.TryGetProperty("c", out var cProperty) &&
+                        result.TryGetProperty("v", out var vProperty))
+                    {
+                        HistoricalData historicalData = new HistoricalData
+                        {
+                            StockId = stockId,
+                            Date = DateTimeOffset.FromUnixTimeMilliseconds(tProperty.GetInt64()).DateTime,
+                            Open = oProperty.GetDouble(),
+                            High = hProperty.GetDouble(),
+                            Low = lProperty.GetDouble(),
+                            Close = cProperty.GetDouble(),
+                            Volume = Convert.ToInt64(vProperty.GetDouble())
+                        };
+
+                        historicalDataList.Add(historicalData);
+                        Debug.WriteLine($"Processed data for date: {historicalData.Date}");
+                    }
+                    else
+                    {
+                        Debug.WriteLine("Missing one or more properties in the result element.");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"Error processing result: {result}");
+                    Debug.WriteLine($"Exception: {ex.Message}");
+                    Debug.WriteLine($"StackTrace: {ex.StackTrace}");
+                    throw;
+                }
+            }
+
+            Debug.WriteLine("Finished processing JSON data.");
+            return historicalDataList;
+        }  
     }
 }
