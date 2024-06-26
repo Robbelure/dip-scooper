@@ -16,6 +16,13 @@ namespace DipScooper.DAL.API
             _client = new HttpClient();
         }
 
+        /// <summary>
+        /// Retrieves time series data for a given stock symbol.
+        /// </summary>
+        /// <param name="symbol">The stock symbol.</param>
+        /// <param name="startDate">The start date for the data.</param>
+        /// <param name="endDate">The end date for the data.</param>
+        /// <returns>The JSON response as a string, or null if an error occurs.</returns>
         public async Task<string?> GetTimeSeriesAsync(string symbol, string startDate, string endDate)
         {
             var url = $"{_baseUrl}/v2/aggs/ticker/{symbol}/range/1/day/{startDate}/{endDate}?adjusted=true&apiKey={_apiKey}";
@@ -33,6 +40,11 @@ namespace DipScooper.DAL.API
             }
         }
 
+        /// <summary>
+        /// Retrieves the latest market price for a given stock symbol.
+        /// </summary>
+        /// <param name="symbol">The stock symbol.</param>
+        /// <returns>The latest market price as a double, or 0.0 if an error occurs.</returns>
         public async Task<double> GetLatestMarketPriceAsync(string symbol)
         {
             var url = $"{_baseUrl}/v2/aggs/ticker/{symbol}/prev?apiKey={_apiKey}";
@@ -73,6 +85,11 @@ namespace DipScooper.DAL.API
             }
         }
 
+        /// <summary>
+        /// Retrieves the book value per share for a given stock symbol.
+        /// </summary>
+        /// <param name="symbol">The stock symbol.</param>
+        /// <returns>The book value per share as a double, or 0.0 if an error occurs.</returns>
         public async Task<double> GetBookValuePerShareAsync(string symbol)
         {
             var url = $"{_baseUrl}/vX/reference/financials?ticker={symbol}&limit=1&timeframe=annual&apiKey={_apiKey}";
@@ -114,6 +131,13 @@ namespace DipScooper.DAL.API
             }
         }
 
+        /// <summary>
+        /// Retrieves the earnings per share (EPS) for a given stock symbol.
+        /// </summary>
+        /// <param name="symbol">The stock symbol.</param>
+        /// <param name="limit">The number of periods to retrieve.</param>
+        /// <param name="timeframe">The timeframe for the data (e.g., "annual" or "quarterly").</param>
+        /// <returns>A list of EPS values, or null if an error occurs.</returns>
         public async Task<List<double>?> GetEPSAsync(string symbol, int limit = 1, string timeframe = "annual")
         {
             var url = $"{_baseUrl}/vX/reference/financials?ticker={symbol}&limit={limit}&timeframe={timeframe}&apiKey={_apiKey}";
@@ -158,17 +182,32 @@ namespace DipScooper.DAL.API
             }
         }
 
+        /// <summary>
+        /// Retrieves the earnings per share (EPS) for the latest period for a given stock symbol.
+        /// </summary>
+        /// <param name="symbol">The stock symbol.</param>
+        /// <returns>The latest EPS value as a double, or 0.0 if an error occurs.</returns>
         public async Task<double> GetEarningsPerShareAsync(string symbol)
         {
             var epsValues = await GetEPSAsync(symbol, 1, "annual");
             return epsValues != null && epsValues.Count > 0 ? epsValues[0] : 0.0;
         }
 
+        /// <summary>
+        /// Retrieves the trailing earnings per share (EPS) for the last four quarters for a given stock symbol.
+        /// </summary>
+        /// <param name="symbol">The stock symbol.</param>
+        /// <returns>A list of EPS values for the last four quarters.</returns>
         public async Task<List<double>> GetTrailingEPSAsync(string symbol)
         {
             return await GetEPSAsync(symbol, 4, "quarterly");
         }
 
+        /// <summary>
+        /// Retrieves the cash flow data for a given stock symbol.
+        /// </summary>
+        /// <param name="symbol">The stock symbol.</param>
+        /// <returns>A list of CashFlowResponse objects containing net cash flow data.</returns>
         public async Task<List<CashFlowResponse>> GetCashFlowsAsync(string symbol)
         {
             var url = $"{_baseUrl}/vX/reference/financials?ticker={symbol}&limit=5&timeframe=annual&apiKey={_apiKey}";
@@ -212,6 +251,11 @@ namespace DipScooper.DAL.API
             }
         }
 
+        /// <summary>
+        /// Retrieves the latest dividend amount for a given stock symbol.
+        /// </summary>
+        /// <param name="symbol">The stock symbol.</param>
+        /// <returns>The latest dividend amount as a double, or 0.0 if an error occurs.</returns>
         public async Task<double> GetLastDividendAsync(string symbol)
         {
             var url = $"{_baseUrl}/v2/reference/dividends/{symbol}?apiKey={_apiKey}";
