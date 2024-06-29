@@ -22,5 +22,41 @@ namespace DipScooper.UI.Properties {
                 return defaultInstance;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("30")]
+        public int NormalDipThreshold {
+            get {
+                return ((int)(this["NormalDipThreshold"]));
+            }
+            set {
+                this["NormalDipThreshold"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("25")]
+        public int BigDipThreshold {
+            get {
+                return ((int)(this["BigDipThreshold"]));
+            }
+            set {
+                this["BigDipThreshold"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("23")]
+        public int SuperDipThreshold {
+            get {
+                return ((int)(this["SuperDipThreshold"]));
+            }
+            set {
+                this["SuperDipThreshold"] = value;
+            }
+        }
     }
 }

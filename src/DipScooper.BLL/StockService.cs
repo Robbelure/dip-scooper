@@ -12,8 +12,25 @@ using MongoDB.Driver;
 namespace DipScooper.BLL
 {
     /// <summary>
-    /// Responsible for handling the business logic related to stock analysis. 
-    /// It communicates with the ApiClient to fetch and processes the data, and performs various calculations.
+    /// StockService handles the business logic related to stock analysis, utilizing the ApiClient for data retrieval.
+    ///
+    /// **Core Responsibilities**:
+    /// 1. **Data Retrieval**:
+    ///    - Fetches historical data and stock information from the database and API.
+    /// 2. **Calculations**:
+    ///    - Calculates various financial metrics and signals, such as P/E ratio, P/B ratio, DCF, DDM, RSI, and SMA.
+    /// 3. **Data Management**:
+    ///    - Ensures the completeness of historical data by identifying and fetching missing date ranges.
+    ///
+    /// **Key Methods**:
+    /// - `CalculateDipSignals`: Analyzes historical data to identify dip signals based on configurable thresholds.
+    /// - `CalculatePERatio`, `CalculatePBRatio`, `CalculateDCF`, `CalculateDDM`: Perform various financial calculations.
+    /// - `LoadDataWithProgressAsync`: Loads historical data, fetching missing data if necessary.
+    /// - `FetchAndSaveHistoricalDataAsync`: Fetches data from the API and saves it to the database.
+    ///
+    /// **Dependencies**:
+    /// - Utilizes `ApiClient` for fetching data from the external API.
+    /// - Interacts with `DbContext` for database operations.
     /// </summary>
     public class StockService
     {
@@ -41,7 +58,7 @@ namespace DipScooper.BLL
         /// </summary>
         /// <param name="historicalDataList">List of historical data.</param>
         /// <returns>List of dip signals.</returns>
-        public List<DipSignal> CalculateDipSignals(List<HistoricalData> historicalDataList)
+        public List<DipSignal> CalculateDipSignals(List<HistoricalData> historicalDataList, int normalDipThreshold, int bigDipThreshold, int superDipThreshold)
         {
             List<double> closePrices = historicalDataList.Select(hd => hd.Close).ToList();
             List<CalculationResult> rsiResults = CalculateRSI(closePrices);
@@ -58,7 +75,7 @@ namespace DipScooper.BLL
                 var sma50Value = sma50Results.ElementAtOrDefault(i)?.Value;
                 var sma200Value = sma200Results.ElementAtOrDefault(i)?.Value;
 
-                if (rsiValue < 23)
+                if (rsiValue < superDipThreshold)
                 {
                     dipSignals.Add(new DipSignal
                     {
@@ -68,7 +85,7 @@ namespace DipScooper.BLL
                         Value = data.Close
                     });
                 }
-                else if (rsiValue < 25)
+                else if (rsiValue < bigDipThreshold)
                 {
                     dipSignals.Add(new DipSignal
                     {
@@ -78,7 +95,7 @@ namespace DipScooper.BLL
                         Value = data.Close
                     });
                 }
-                else if (rsiValue < 30)
+                else if (rsiValue < normalDipThreshold)
                 {
                     dipSignals.Add(new DipSignal
                     {
@@ -254,9 +271,6 @@ namespace DipScooper.BLL
         #endregion
 
 
-        /// <summary>
-        /// Retrieves stock information from the database, creates a new entry if not found.
-        /// </summary>
         public async Task<Stock> GetOrCreateStockAsync(string symbol)
         {
             var stock = await dbContext.Stocks.Find(s => s.Symbol == symbol).FirstOrDefaultAsync();
@@ -268,26 +282,29 @@ namespace DipScooper.BLL
             return stock;
         }
 
-
-        /// <summary>
-        /// Loads historical data from the database, fetches missing data from the API if necessary.
-        /// </summary>
         public async Task<List<HistoricalData>> LoadDataWithProgressAsync(string symbol, DateTime startDate, DateTime endDate, IProgress<int> progress)
         {
             progress.Report(0);
 
             var stock = await GetOrCreateStockAsync(symbol);
+            
             progress.Report(20);
 
             var historicalDataList = await dbContext.HistoricalData
                 .Find(hd => hd.StockId == stock.Id && hd.Date >= startDate && hd.Date <= endDate)
                 .ToListAsync();
+            
             progress.Report(40);
 
             var existingDates = historicalDataList.Select(hd => hd.Date).ToList();
-            progress.Report(50);
-
             var missingRanges = GetMissingDateRanges(startDate, endDate, existingDates);
+
+            if (!missingRanges.Any())
+            {
+                progress.Report(100);
+                return historicalDataList;
+            }
+
             progress.Report(60);
 
             foreach (var (rangeStart, rangeEnd) in missingRanges)
@@ -300,20 +317,12 @@ namespace DipScooper.BLL
             historicalDataList = await dbContext.HistoricalData
                 .Find(hd => hd.StockId == stock.Id && hd.Date >= startDate && hd.Date <= endDate)
                 .ToListAsync();
+            
             progress.Report(100);
 
             return historicalDataList;
         }
 
-
-        /// <summary>
-        /// Fetches data from the API and inserts it into the database.
-        /// </summary>
-        /// <param name="stockId">The stock ID.</param>
-        /// <param name="symbol">The stock symbol.</param>
-        /// <param name="startDate">The start date for data retrieval.</param>
-        /// <param name="endDate">The end date for data retrieval.</param>
-        /// <returns>List of historical data.</returns>
         public async Task<List<HistoricalData>> FetchAndSaveHistoricalDataAsync(string stockId, string symbol, DateTime startDate, DateTime endDate)
         {
             string jsonData = await apiClient.GetTimeSeriesAsync(symbol, startDate.ToString("yyyy-MM-dd"), endDate.ToString("yyyy-MM-dd"));
@@ -333,14 +342,6 @@ namespace DipScooper.BLL
             return existingData;
         }
 
-
-        /// <summary>
-        /// Identifies missing date ranges in the historical data.
-        /// </summary>
-        /// <param name="startDate">The start date for data retrieval.</param>
-        /// <param name="endDate">The end date for data retrieval.</param>
-        /// <param name="existingDates">List of existing dates in the data.</param>
-        /// <returns>List of tuples representing the missing date ranges.</returns>
         private List<(DateTime, DateTime)> GetMissingDateRanges(DateTime startDate, DateTime endDate, List<DateTime> existingDates)
         {
             List<(DateTime, DateTime)> missingRanges = new List<(DateTime, DateTime)>();
@@ -364,13 +365,6 @@ namespace DipScooper.BLL
             return missingRanges;
         }
 
-
-        /// <summary>
-        /// Processes JSON data from the API and returns a list of HistoricalData objects.
-        /// </summary>
-        /// <param name="jsonData">The JSON data from the API.</param>
-        /// <param name="stockId">The stock ID.</param>
-        /// <returns>List of HistoricalData objects.</returns>
         public List<HistoricalData> ProcessJsonData(string jsonData, string stockId)
         {
             if (string.IsNullOrEmpty(jsonData))

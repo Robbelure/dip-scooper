@@ -12,15 +12,39 @@ using DipScooper.Models;
 
 namespace DipScooper.UI
 {
+    /// <summary>
+    /// Form1 handles the main user interface for the DipScooper application, managing user interactions and displaying data.
+    ///
+    /// **Core Responsibilities**:
+    /// 1. **User Interactions**:
+    ///    - Handles user input for stock symbol and date range selection.
+    ///    - Triggers data retrieval and analysis based on user actions (e.g., search button click).
+    /// 2. **Data Display**:
+    ///    - Updates data grids and charts to display historical stock data and dip signals.
+    ///    - Reflects user-configured dip thresholds in real-time.
+    ///
+    /// **Key Methods**:
+    /// - `BtnSearch_Click`: Initiates data retrieval and analysis based on user input.
+    /// - `CheckForDipSignals`: Updates the dip signals data grid based on the latest analysis.
+    /// - `SettingsForm_SettingsSaved`: Responds to changes in user-configured dip thresholds and updates the dip signals.
+    ///
+    /// **Dependencies**:
+    /// - Utilizes `StockService` for business logic and data retrieval.
+    /// - Interacts with `SettingsForm` for configuring dip thresholds.
+    /// </summary>
     public partial class Form1 : Form
     {
         private StockService stockService;
+        private List<HistoricalData> historicalDataList;
+        private static SettingsForm settingsFormInstance;
 
         public Form1()
         {
             InitializeComponent();
             stockService = new StockService();
             InitializeControls();
+
+            Debug.WriteLine("Form1 initialized.");
         }
 
         private void InitializeControls()
@@ -29,11 +53,15 @@ namespace DipScooper.UI
             InitializeTextBoxSearch();
             InitializeDataGridViews();
             InitializeChartControl();
+
+            BtnSearch.Click += BtnSearch_Click;
+            BtnOpenSettings.Click += BtnOpenSettings_Click;
         }
 
         private async void BtnSearch_Click(object sender, EventArgs e)
         {
             string symbol = textBoxSearch.Text.Trim().ToUpper();
+
             if (string.IsNullOrEmpty(symbol))
             {
                 MessageBox.Show("Please enter a valid stock symbol.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
@@ -52,10 +80,11 @@ namespace DipScooper.UI
                 DateTime startDate = dateTimePickerStart.Value.Date;
                 DateTime endDate = dateTimePickerEnd.Value.Date;
 
-                var historicalDataList = await stockService.LoadDataWithProgressAsync(symbol, startDate, endDate, progress);
+                historicalDataList = await stockService.LoadDataWithProgressAsync(symbol, startDate, endDate, progress);
 
                 if (historicalDataList.Any())
                 {
+                    Debug.WriteLine("Historical data loaded successfully.");
                     InitializeChartControl();
                     UpdateChartWithData(historicalDataList);
                     chartControlStocks.Refresh();
@@ -66,6 +95,10 @@ namespace DipScooper.UI
                     }
 
                     CheckForDipSignals(historicalDataList);
+                }
+                else
+                {
+                    Debug.WriteLine("No historical data found for the given symbol and date range.");
                 }
             }
             catch (Exception ex)
@@ -123,6 +156,37 @@ namespace DipScooper.UI
             {
                 MessageBox.Show($"Error performing calculations: {ex.Message}\nStackTrace: {ex.StackTrace}");
                 Debug.WriteLine($"Error performing calculations: {ex.Message}\nStackTrace: {ex.StackTrace}");
+            }
+        }
+
+        private void BtnOpenSettings_Click(object sender, EventArgs e)
+        {
+            if (settingsFormInstance == null || settingsFormInstance.IsDisposed)
+            {
+                Debug.WriteLine("Opening SettingsForm...");
+                settingsFormInstance = new SettingsForm();
+                settingsFormInstance.SettingsSaved += SettingsForm_SettingsSaved;
+                settingsFormInstance.FormClosed += SettingsFormInstance_FormClosed;
+                settingsFormInstance.Show();
+            }
+        }
+
+        private void SettingsFormInstance_FormClosed(object sender, FormClosedEventArgs e)
+        {
+            settingsFormInstance.SettingsSaved -= SettingsForm_SettingsSaved;
+            settingsFormInstance.FormClosed -= SettingsFormInstance_FormClosed;
+            settingsFormInstance = null;
+            Debug.WriteLine("SettingsForm closed.");
+        }
+
+        private void SettingsForm_SettingsSaved(object sender, EventArgs e)
+        {
+            Debug.WriteLine("SettingsForm_SettingsSaved event triggered.");
+
+            // Kall CheckForDipSignals på nytt med de nye innstillingene
+            if (historicalDataList != null && historicalDataList.Any())
+            {
+                CheckForDipSignals(historicalDataList);
             }
         }
 
@@ -197,6 +261,19 @@ namespace DipScooper.UI
             dataGridView_stocks.Columns.Add("Low", "Low");
             dataGridView_stocks.Columns.Add("Close", "Close");
             dataGridView_stocks.Columns.Add("Volume", "Volume");
+
+            // Sett fargene for kolonneoverskriftene
+            dataGridView_stocks.ColumnHeadersDefaultCellStyle.BackColor = Color.DimGray;
+            dataGridView_stocks.ColumnHeadersDefaultCellStyle.ForeColor = Color.AntiqueWhite;
+
+            // Sett fargene for radene
+            dataGridView_stocks.RowsDefaultCellStyle.BackColor = Color.Black;
+            dataGridView_stocks.RowsDefaultCellStyle.ForeColor = Color.AntiqueWhite;
+
+            dataGridView_stocks.EnableHeadersVisualStyles = false;
+
+            // Oppdater DataGridView for å vise endringene
+            dataGridView_stocks.Refresh();
         }
 
         private void InitializeDataGridViewAnalyzeColumns()
@@ -204,6 +281,19 @@ namespace DipScooper.UI
             dataGridView_analyze.Columns.Clear();
             dataGridView_analyze.Columns.Add("Calculation", "Calculation");
             dataGridView_analyze.Columns.Add("Result", "Result");
+
+            // Sett fargene for kolonneoverskriftene
+            dataGridView_analyze.ColumnHeadersDefaultCellStyle.BackColor = Color.DimGray;
+            dataGridView_analyze.ColumnHeadersDefaultCellStyle.ForeColor = Color.AntiqueWhite;
+
+            // Sett fargene for radene
+            dataGridView_analyze.RowsDefaultCellStyle.BackColor = Color.Black;
+            dataGridView_analyze.RowsDefaultCellStyle.ForeColor = Color.AntiqueWhite;
+
+            dataGridView_analyze.EnableHeadersVisualStyles = false;
+
+            // Oppdater DataGridView for å vise endringene
+            dataGridView_analyze.Refresh();
         }
 
         private void InitializeDataGridViewDipSignals()
@@ -425,7 +515,13 @@ namespace DipScooper.UI
         {
             dataGridView_dipSignals.Rows.Clear();
 
-            List<DipSignal> dipSignals = stockService.CalculateDipSignals(historicalDataList);
+            int normalDipThreshold = Properties.Settings.Default.NormalDipThreshold;
+            int bigDipThreshold = Properties.Settings.Default.BigDipThreshold;
+            int superDipThreshold = Properties.Settings.Default.SuperDipThreshold;
+
+            Debug.WriteLine($"CheckForDipSignals called with thresholds: NormalDipThreshold={normalDipThreshold}, BigDipThreshold={bigDipThreshold}, SuperDipThreshold={superDipThreshold}");
+
+            List<DipSignal> dipSignals = stockService.CalculateDipSignals(historicalDataList, normalDipThreshold, bigDipThreshold, superDipThreshold);
 
             foreach (var signal in dipSignals)
             {
@@ -435,6 +531,8 @@ namespace DipScooper.UI
                     dataGridView_dipSignals.Rows[rowIndex].DefaultCellStyle.BackColor = Color.Purple;
                 }
             }
+            Debug.WriteLine($"CheckForDipSignals completed. {dipSignals.Count} dip signals found.");
+
         }
 
         #endregion
@@ -454,7 +552,7 @@ namespace DipScooper.UI
             if (textBox != null && textBox.Text == (string)textBox.Tag)
             {
                 textBox.Text = "";
-                textBox.ForeColor = Color.Black;
+                textBox.ForeColor = Color.AntiqueWhite;
             }
         }
 
@@ -483,5 +581,7 @@ namespace DipScooper.UI
         }
 
         #endregion
+
+
     }
 }

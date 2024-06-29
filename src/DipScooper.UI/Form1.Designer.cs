@@ -67,6 +67,7 @@ namespace DipScooper.UI
             chartControlStocks = new DevExpress.XtraCharts.ChartControl();
             dataGridView_dipSignals = new DataGridView();
             labelControl1 = new DevExpress.XtraEditors.LabelControl();
+            BtnOpenSettings = new Button();
             ((System.ComponentModel.ISupportInitialize)dataGridView_stocks).BeginInit();
             ((System.ComponentModel.ISupportInitialize)dataGridView_analyze).BeginInit();
             ((System.ComponentModel.ISupportInitialize)chartControlStocks).BeginInit();
@@ -78,7 +79,7 @@ namespace DipScooper.UI
             dataGridView_stocks.AllowUserToAddRows = false;
             dataGridView_stocks.AllowUserToDeleteRows = false;
             dataGridView_stocks.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
-            dataGridView_stocks.BackgroundColor = Color.DimGray;
+            dataGridView_stocks.BackgroundColor = Color.Black;
             dataGridViewCellStyle1.Alignment = DataGridViewContentAlignment.MiddleLeft;
             dataGridViewCellStyle1.BackColor = Color.Gray;
             dataGridViewCellStyle1.Font = new Font("Segoe UI", 9F, FontStyle.Regular, GraphicsUnit.Point);
@@ -97,7 +98,7 @@ namespace DipScooper.UI
             dataGridViewCellStyle2.SelectionForeColor = SystemColors.HighlightText;
             dataGridViewCellStyle2.WrapMode = DataGridViewTriState.False;
             dataGridView_stocks.DefaultCellStyle = dataGridViewCellStyle2;
-            dataGridView_stocks.GridColor = Color.Gold;
+            dataGridView_stocks.GridColor = SystemColors.Window;
             dataGridView_stocks.Location = new Point(12, 71);
             dataGridView_stocks.Name = "dataGridView_stocks";
             dataGridView_stocks.ReadOnly = true;
@@ -159,10 +160,11 @@ namespace DipScooper.UI
             // BtnSearch
             // 
             BtnSearch.BackColor = Color.Black;
+            BtnSearch.FlatAppearance.MouseDownBackColor = Color.Teal;
             BtnSearch.FlatStyle = FlatStyle.Flat;
             BtnSearch.Font = new Font("Segoe UI Semibold", 9.75F, FontStyle.Bold, GraphicsUnit.Point);
             BtnSearch.ForeColor = Color.Gold;
-            BtnSearch.Location = new Point(12, 36);
+            BtnSearch.Location = new Point(12, 38);
             BtnSearch.Name = "BtnSearch";
             BtnSearch.Size = new Size(114, 27);
             BtnSearch.TabIndex = 2;
@@ -172,6 +174,8 @@ namespace DipScooper.UI
             // 
             // textBoxSearch
             // 
+            textBoxSearch.BackColor = SystemColors.InactiveCaptionText;
+            textBoxSearch.ForeColor = Color.AntiqueWhite;
             textBoxSearch.Location = new Point(12, 7);
             textBoxSearch.Name = "textBoxSearch";
             textBoxSearch.Size = new Size(328, 23);
@@ -186,7 +190,7 @@ namespace DipScooper.UI
             // 
             checkBoxPERatio.AutoSize = true;
             checkBoxPERatio.BackColor = Color.DarkSlateGray;
-            checkBoxPERatio.ForeColor = Color.Gold;
+            checkBoxPERatio.ForeColor = SystemColors.Window;
             checkBoxPERatio.Location = new Point(12, 209);
             checkBoxPERatio.Name = "checkBoxPERatio";
             checkBoxPERatio.Size = new Size(76, 19);
@@ -198,8 +202,8 @@ namespace DipScooper.UI
             // 
             checkBoxPBRatio.AutoSize = true;
             checkBoxPBRatio.BackColor = Color.DarkSlateGray;
-            checkBoxPBRatio.ForeColor = Color.Gold;
-            checkBoxPBRatio.Location = new Point(148, 209);
+            checkBoxPBRatio.ForeColor = SystemColors.Window;
+            checkBoxPBRatio.Location = new Point(94, 209);
             checkBoxPBRatio.Name = "checkBoxPBRatio";
             checkBoxPBRatio.Size = new Size(77, 19);
             checkBoxPBRatio.TabIndex = 6;
@@ -210,8 +214,8 @@ namespace DipScooper.UI
             // 
             checkBoxDCF.AutoSize = true;
             checkBoxDCF.BackColor = Color.DarkSlateGray;
-            checkBoxDCF.ForeColor = Color.Gold;
-            checkBoxDCF.Location = new Point(94, 209);
+            checkBoxDCF.ForeColor = SystemColors.Window;
+            checkBoxDCF.Location = new Point(177, 209);
             checkBoxDCF.Name = "checkBoxDCF";
             checkBoxDCF.Size = new Size(48, 19);
             checkBoxDCF.TabIndex = 7;
@@ -222,7 +226,7 @@ namespace DipScooper.UI
             // 
             checkBoxDDM.AutoSize = true;
             checkBoxDDM.BackColor = Color.DarkSlateGray;
-            checkBoxDDM.ForeColor = Color.Gold;
+            checkBoxDDM.ForeColor = SystemColors.Window;
             checkBoxDDM.Location = new Point(231, 209);
             checkBoxDDM.Name = "checkBoxDDM";
             checkBoxDDM.Size = new Size(53, 19);
@@ -233,6 +237,7 @@ namespace DipScooper.UI
             // btnCalculate
             // 
             btnCalculate.BackColor = Color.Black;
+            btnCalculate.FlatAppearance.MouseDownBackColor = Color.Teal;
             btnCalculate.FlatStyle = FlatStyle.Flat;
             btnCalculate.Font = new Font("Segoe UI Semibold", 9.75F, FontStyle.Bold, GraphicsUnit.Point);
             btnCalculate.ForeColor = Color.Gold;
@@ -249,7 +254,7 @@ namespace DipScooper.UI
             dataGridView_analyze.AllowUserToAddRows = false;
             dataGridView_analyze.AllowUserToDeleteRows = false;
             dataGridView_analyze.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
-            dataGridView_analyze.BackgroundColor = Color.DimGray;
+            dataGridView_analyze.BackgroundColor = Color.Black;
             dataGridViewCellStyle4.Alignment = DataGridViewContentAlignment.MiddleLeft;
             dataGridViewCellStyle4.BackColor = Color.Gray;
             dataGridViewCellStyle4.Font = new Font("Segoe UI", 9F, FontStyle.Regular, GraphicsUnit.Point);
@@ -268,7 +273,7 @@ namespace DipScooper.UI
             dataGridViewCellStyle5.SelectionForeColor = SystemColors.HighlightText;
             dataGridViewCellStyle5.WrapMode = DataGridViewTriState.False;
             dataGridView_analyze.DefaultCellStyle = dataGridViewCellStyle5;
-            dataGridView_analyze.GridColor = Color.Gold;
+            dataGridView_analyze.GridColor = SystemColors.Window;
             dataGridView_analyze.Location = new Point(12, 267);
             dataGridView_analyze.Name = "dataGridView_analyze";
             dataGridViewCellStyle6.Alignment = DataGridViewContentAlignment.MiddleLeft;
@@ -318,6 +323,7 @@ namespace DipScooper.UI
             // 
             // progressBar_search
             // 
+            progressBar_search.BackColor = SystemColors.WindowText;
             progressBar_search.Location = new Point(12, 27);
             progressBar_search.Name = "progressBar_search";
             progressBar_search.Size = new Size(328, 3);
@@ -379,11 +385,26 @@ namespace DipScooper.UI
             labelControl1.Appearance.Options.UseBackColor = true;
             labelControl1.Appearance.Options.UseFont = true;
             labelControl1.AutoSizeMode = DevExpress.XtraEditors.LabelAutoSizeMode.None;
-            labelControl1.Location = new Point(432, 372);
+            labelControl1.Location = new Point(458, 372);
             labelControl1.Name = "labelControl1";
             labelControl1.Size = new Size(109, 21);
             labelControl1.TabIndex = 16;
             labelControl1.Text = "Scoop the Dip!";
+            // 
+            // BtnOpenSettings
+            // 
+            BtnOpenSettings.BackColor = Color.Black;
+            BtnOpenSettings.FlatAppearance.MouseDownBackColor = Color.Teal;
+            BtnOpenSettings.FlatStyle = FlatStyle.Flat;
+            BtnOpenSettings.Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold, GraphicsUnit.Point);
+            BtnOpenSettings.ForeColor = Color.AntiqueWhite;
+            BtnOpenSettings.Location = new Point(911, 372);
+            BtnOpenSettings.Name = "BtnOpenSettings";
+            BtnOpenSettings.Size = new Size(91, 25);
+            BtnOpenSettings.TabIndex = 17;
+            BtnOpenSettings.Text = "Customize";
+            BtnOpenSettings.UseVisualStyleBackColor = false;
+            BtnOpenSettings.Click += BtnOpenSettings_Click;
             // 
             // Form1
             // 
@@ -391,6 +412,7 @@ namespace DipScooper.UI
             AutoScaleMode = AutoScaleMode.Font;
             BackColor = Color.DarkSlateGray;
             ClientSize = new Size(1014, 552);
+            Controls.Add(BtnOpenSettings);
             Controls.Add(labelControl1);
             Controls.Add(dataGridView_dipSignals);
             Controls.Add(chartControlStocks);
@@ -446,5 +468,6 @@ namespace DipScooper.UI
         private DataGridViewTextBoxColumn VolumeColumn;
         private DataGridView dataGridView_dipSignals;
         private DevExpress.XtraEditors.LabelControl labelControl1;
+        private Button BtnOpenSettings;
     }
 }
